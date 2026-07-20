@@ -1,0 +1,13 @@
+name: airflow_duckdb_s3
+version: "0.1.0"
+config-version: 2
+profile: airflow_duckdb_s3
+model-paths: ["models"]
+macro-paths: ["macros"]
+clean-targets: ["target", "dbt_packages"]
+
+models:
+  airflow_duckdb_s3:
+    +materialized: external
+    +format: parquet
+

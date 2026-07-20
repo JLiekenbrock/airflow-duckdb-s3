@@ -1,0 +1,28 @@
+services:
+  airflow:
+    build:
+      context: .
+      dockerfile: Dockerfile.airflow
+    image: ${AIRFLOW_IMAGE:-airflow-duckdb-s3-airflow:2.10.4}
+    command: standalone
+    restart: unless-stopped
+    ports:
+      - "${AIRFLOW_PORT:-8082}:8080"
+    environment:
+      AIRFLOW_HOME: /opt/airflow
+      AIRFLOW__CORE__DAGS_FOLDER: /opt/airflow/dags
+      AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+      AIRFLOW__CORE__EXECUTOR: SequentialExecutor
+      AIRFLOW__WEBSERVER__EXPOSE_CONFIG: "true"
+      PIPELINE_IMAGE: ${PIPELINE_IMAGE:-registry.example.com/data/airflow-duckdb-s3:0.1.0}
+      OPENSHIFT_NAMESPACE: ${OPENSHIFT_NAMESPACE:-data-jobs}
+      OPENSHIFT_SERVICE_ACCOUNT: ${OPENSHIFT_SERVICE_ACCOUNT:-duckdb-s3-runner}
+      OPENSHIFT_S3_SECRET: ${OPENSHIFT_S3_SECRET:-duckdb-s3-credentials}
+      KUBECONFIG: /opt/airflow/.kube/config
+    volumes:
+      - ./airflow/dags:/opt/airflow/dags:ro
+      - ${KUBECONFIG:-~/.kube/config}:/opt/airflow/.kube/config:ro
+      - airflow_state:/opt/airflow
+
+volumes:
+  airflow_state:
