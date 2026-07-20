@@ -25,14 +25,22 @@
   {%- endfor -%}
 {%- endmacro %}
 
-{% macro input_uri() -%}
-  {%- set template = env_var('DBT_INPUT_URI_TEMPLATE') -%}
-  {{ return(template.replace('{mandant}', require_mandant())) }}
+{% macro require_table(table) -%}
+  {%- if table not in ['customer', 'account', 'transaction'] -%}
+    {{ exceptions.raise_compiler_error('unsupported table: ' ~ table) }}
+  {%- endif -%}
+  {{ return(table) }}
 {%- endmacro %}
 
-{% macro output_uri() -%}
+{% macro input_uri(table) -%}
+  {%- set template = env_var('DBT_INPUT_URI_TEMPLATE') -%}
+  {%- set result = template.replace('{mandant}', require_mandant()) -%}
+  {{ return(result.replace('{table}', require_table(table))) }}
+{%- endmacro %}
+
+{% macro output_uri(table) -%}
   {%- set template = env_var('DBT_OUTPUT_URI_TEMPLATE') -%}
   {%- set result = template.replace('{mandant}', require_mandant()) -%}
+  {%- set result = result.replace('{table}', require_table(table)) -%}
   {{ return(result.replace('{run_id}', var('run_id'))) }}
 {%- endmacro %}
-

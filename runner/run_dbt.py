@@ -10,6 +10,7 @@ from pathlib import Path
 
 
 MANDANT_RE = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
+MODELS = ("customer", "account", "transaction")
 
 
 def parse_stichtage(raw: str) -> list[str]:
@@ -33,6 +34,7 @@ def parse_stichtage(raw: str) -> list[str]:
 
 def main() -> int:
     parser = argparse.ArgumentParser()
+    parser.add_argument("--model", required=True, choices=MODELS)
     parser.add_argument("--mandant", required=True)
     parser.add_argument("--stichtage", required=True, type=parse_stichtage)
     parser.add_argument("--run-id", required=True)
@@ -52,6 +54,8 @@ def main() -> int:
         "-m",
         "dbt",
         "build",
+        "--select",
+        args.model,
         "--project-dir",
         str(Path(args.project_dir)),
         "--profiles-dir",
@@ -66,4 +70,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

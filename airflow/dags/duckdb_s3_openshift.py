@@ -17,40 +17,15 @@ SERVICE_ACCOUNT = os.environ.get("OPENSHIFT_SERVICE_ACCOUNT", "duckdb-s3-runner"
 S3_SECRET = os.environ.get("OPENSHIFT_S3_SECRET", "duckdb-s3-credentials")
 
 
-with DAG(
-    dag_id="duckdb_s3_openshift",
-    description="Run dbt-duckdb S3 transformations in an OpenShift pod",
-    start_date=datetime(2026, 1, 1),
-    schedule=None,
-    catchup=False,
-    max_active_runs=4,
-    default_args={"retries": 2, "retry_delay": timedelta(minutes=5)},
-    params={
-        "mandant": Param(
-            "m001",
-            type="string",
-            pattern=r"^[A-Za-z0-9_-]{1,64}$",
-            description="Mandant/tenant identifier",
-        ),
-        "stichtage": Param(
-            ["2026-06-30"],
-            type="array",
-            minItems=1,
-            maxItems=366,
-            items={"type": "string", "format": "date"},
-            description="ISO reporting dates",
-        ),
-    },
-    render_template_as_native_obj=False,
-    tags=["duckdb", "dbt", "s3", "openshift"],
-) as dag:
-    transform = KubernetesPodOperator(
-        task_id="build_stichtag_report",
-        name="duckdb-s3-stichtag-report",
+def table_task(table: str) -> KubernetesPodOperator:
+    return KubernetesPodOperator(
+        task_id=f"build_{table}",
+        name=f"duckdb-s3-{table}",
         namespace=NAMESPACE,
         image=PIPELINE_IMAGE,
-        cmds=None,
         arguments=[
+            "--model",
+            table,
             "--mandant",
             "{{ params.mandant }}",
             "--stichtage",
@@ -83,3 +58,37 @@ with DAG(
             "seccompProfile": {"type": "RuntimeDefault"},
         },
     )
+
+
+with DAG(
+    dag_id="duckdb_s3_openshift",
+    description="Run dbt-duckdb S3 transformations in an OpenShift pod",
+    start_date=datetime(2026, 1, 1),
+    schedule=None,
+    catchup=False,
+    max_active_runs=4,
+    default_args={"retries": 2, "retry_delay": timedelta(minutes=5)},
+    params={
+        "mandant": Param(
+            "m001",
+            type="string",
+            pattern=r"^[A-Za-z0-9_-]{1,64}$",
+            description="Mandant/tenant identifier",
+        ),
+        "stichtage": Param(
+            ["2026-06-30"],
+            type="array",
+            minItems=1,
+            maxItems=366,
+            items={"type": "string", "format": "date"},
+            description="ISO reporting dates",
+        ),
+    },
+    render_template_as_native_obj=False,
+    tags=["duckdb", "dbt", "s3", "openshift"],
+) as dag:
+    customer = table_task("customer")
+    account = table_task("account")
+    transaction = table_task("transaction")
+
+    customer >> account >> transaction

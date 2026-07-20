@@ -1,11 +1,16 @@
 version: 2
 
 models:
-  - name: stichtag_report
-    description: Aggregation for one mandant and the DAG-selected reporting dates.
-    columns:
+  - name: customer
+    description: Customer rows selected for one mandant and reporting dates.
+    columns: &partition_columns
       - name: mandant
         tests: [not_null]
       - name: stichtag
         tests: [not_null]
-
+  - name: account
+    description: Account rows selected for one mandant and reporting dates.
+    columns: *partition_columns
+  - name: transaction
+    description: Transaction rows selected for one mandant and reporting dates.
+    columns: *partition_columns

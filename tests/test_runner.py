@@ -2,7 +2,11 @@ import argparse
 
 import pytest
 
-from runner.run_dbt import parse_stichtage
+from runner.run_dbt import MODELS, parse_stichtage
+
+
+def test_expected_table_models_are_exposed():
+    assert MODELS == ("customer", "account", "transaction")
 
 
 def test_parse_stichtage_accepts_iso_dates():
@@ -16,4 +20,3 @@ def test_parse_stichtage_accepts_iso_dates():
 def test_parse_stichtage_rejects_invalid_values(value):
     with pytest.raises(argparse.ArgumentTypeError):
         parse_stichtage(value)
-

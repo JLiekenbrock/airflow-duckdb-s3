@@ -21,8 +21,9 @@ local Airflow 2.10.4
        |
        | Kubernetes API (current kubeconfig / OpenShift service account)
        v
-OpenShift KubernetesPodOperator pod
+OpenShift KubernetesPodOperator pods
        |
+       +-- customer -> account -> transaction
        +-- dbt-duckdb renders SQL with mandant + stichtage
        +-- DuckDB reads s3://.../input/**/*.parquet
        +-- DuckDB writes s3://.../output/mandant=.../*.parquet
@@ -31,6 +32,20 @@ OpenShift KubernetesPodOperator pod
 `KubernetesPodOperator` is used deliberately: Airflow remains local, while only
 the data workload runs in OpenShift. This is not an Airflow `KubernetesExecutor`
 deployment.
+
+### How tasks reach OpenShift
+
+The Airflow container mounts the host kubeconfig at
+`/opt/airflow/.kube/config`. For each table task, KubernetesPodOperator uses
+that kubeconfig to call the OpenShift-compatible Kubernetes API and creates a
+pod in `OPENSHIFT_NAMESPACE`. The pod uses `OPENSHIFT_SERVICE_ACCOUNT`, imports
+S3 environment variables from `OPENSHIFT_S3_SECRET`, and runs the image named by
+`PIPELINE_IMAGE`.
+
+OpenShift must be able to pull that image. The startup script's optional
+`-PublishImage` switch builds and pushes it before Airflow starts. The local
+machine needs network access to the OpenShift API; the cluster needs access to
+the image registry and S3 endpoint.
 
 ## Quick start
 
@@ -59,6 +74,24 @@ deployment.
 
 5. Start local Airflow:
 
+   Windows PowerShell:
+
+   ```powershell
+   .\start-airflow.ps1
+   ```
+
+   The script verifies Docker, kubeconfig, the active OpenShift login and the
+   target namespace. To build and push the task image first:
+
+   ```powershell
+   .\start-airflow.ps1 -PublishImage
+   ```
+
+   Use `-SkipOpenShiftCheck` to start only the local UI when `oc` is not
+   installed. The DAG cannot launch pods until a valid kubeconfig is mounted.
+
+   Direct Compose alternative:
+
    ```shell
    docker compose up --build
    ```
@@ -85,24 +118,26 @@ in that cluster.
 The example expects input below:
 
 ```text
-s3://<bucket>/<INPUT_PREFIX>/mandant=<mandant>/stichtag=YYYY-MM-DD/*.parquet
+s3://<bucket>/<INPUT_PREFIX>/<table>/mandant=<mandant>/stichtag=YYYY-MM-DD/*.parquet
 ```
 
 and publishes to:
 
 ```text
-s3://<bucket>/<OUTPUT_PREFIX>/mandant=<mandant>/report_<run-id>.parquet
+s3://<bucket>/<OUTPUT_PREFIX>/<table>/mandant=<mandant>/<table>_<run-id>.parquet
 ```
 
 Configure the two URI templates with `DBT_INPUT_URI_TEMPLATE` and
-`DBT_OUTPUT_URI_TEMPLATE`. The macros validate substituted identifiers before
-building a URI. Date values are passed separately as a dbt list and rendered as
-SQL date literals.
+`DBT_OUTPUT_URI_TEMPLATE`. Both accept `{table}` and `{mandant}`; output also
+accepts `{run_id}`. The macros validate substituted identifiers before building
+a URI. Date values are passed separately as a dbt list and rendered as SQL date
+literals.
 
 ## Local validation without OpenShift
 
 ```shell
 python runner/run_dbt.py \
+  --model customer \
   --mandant m001 \
   --stichtage '["2026-06-30"]' \
   --project-dir . \
