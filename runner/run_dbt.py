@@ -4,8 +4,8 @@ import argparse
 import datetime as dt
 import json
 import re
+import shutil
 import subprocess
-import sys
 from pathlib import Path
 
 
@@ -49,10 +49,11 @@ def main() -> int:
     dbt_vars = json.dumps(
         {"mandant": args.mandant, "stichtage": args.stichtage, "run_id": safe_run_id}
     )
+    dbt_executable = shutil.which("dbt")
+    if not dbt_executable:
+        parser.error("dbt executable was not found on PATH")
     command = [
-        sys.executable,
-        "-m",
-        "dbt",
+        dbt_executable,
         "build",
         "--select",
         args.model,

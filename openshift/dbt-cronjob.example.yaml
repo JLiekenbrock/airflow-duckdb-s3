@@ -33,7 +33,7 @@ spec:
                 - |
                   STICHTAG="$(date -u -d yesterday +%F)"
                   RUN_ID="cron-$(date -u +%Y%m%dT%H%M%SZ)"
-                  exec python -m dbt build \
+                  exec dbt build \
                     --project-dir /opt/pipeline \
                     --profiles-dir /opt/pipeline \
                     --target openshift \
@@ -58,4 +58,3 @@ spec:
                 runAsNonRoot: true
                 seccompProfile:
                   type: RuntimeDefault
-

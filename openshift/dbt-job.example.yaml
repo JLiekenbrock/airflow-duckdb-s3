@@ -21,7 +21,7 @@ spec:
           # Replace data-jobs with the project containing the ImageStream.
           image: image-registry.openshift-image-registry.svc:5000/data-jobs/airflow-duckdb-s3:latest
           imagePullPolicy: Always
-          command: ["python", "-m", "dbt"]
+          command: ["dbt"]
           args:
             - build
             - --project-dir
@@ -50,4 +50,3 @@ spec:
             runAsNonRoot: true
             seccompProfile:
               type: RuntimeDefault
-

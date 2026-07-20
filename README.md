@@ -14,6 +14,50 @@ The DAG exposes two run parameters:
 They are passed as JSON to the pod and then as typed dbt vars. SQL is kept in
 dbt/Jinja templates in `models/` and `macros/`; the DAG contains no business SQL.
 
+Customer and account are published as SCD2 histories. Their business keys are
+`(mandant, customer_id)` and `(mandant, account_id)`. For every detected payload
+change, dbt emits `valid_from`, `valid_to`, `is_current`, and
+`scd_change_hash`. Transaction remains a non-SCD2 selection.
+
+The SCD2 build is a deterministic full-history rebuild over the `stichtage`
+provided to the run. Each selected date must represent a complete snapshot for
+that mandant, and every business key may occur at most once per snapshot. Pass
+all snapshot dates required for the desired history; a single date can only
+produce the current version. This avoids storing dbt snapshot state in the
+ephemeral DuckDB database inside a short-lived OpenShift pod.
+
+### Backfills
+
+For customer and account SCD2, submit the entire desired snapshot history in a
+single DAG run. Do not split one entity's history into separate date chunks:
+each chunk would independently mark its final version as current. The DAG
+accepts at most 366 dates per run.
+
+Trigger a daily snapshot backfill from the local Airflow container:
+
+```powershell
+.\backfill-airflow.ps1 -Mandant m001 -From 2026-01-01 -To 2026-07-31
+```
+
+For month-end snapshots only:
+
+```powershell
+.\backfill-airflow.ps1 -Mandant m001 -From 2025-01-01 -To 2026-07-31 -Frequency MonthEnd
+```
+
+Preview the generated DAG configuration without triggering it:
+
+```powershell
+.\backfill-airflow.ps1 -Mandant m001 -From 2026-01-01 -To 2026-01-31 -DryRun
+```
+
+The helper triggers one manual `duckdb_s3_openshift` DAG run. Airflow's
+calendar backfill command is intentionally not used because this DAG has no
+schedule and the SCD2 transformation needs the selected dates together. Output
+files contain the Airflow run ID, so a backfill is immutable and does not
+silently overwrite an earlier publication. Promote or replace a canonical S3
+pointer separately after validation if downstream readers require one.
+
 ## Architecture
 
 ```text

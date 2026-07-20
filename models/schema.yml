@@ -2,15 +2,35 @@ version: 2
 
 models:
   - name: customer
-    description: Customer rows selected for one mandant and reporting dates.
-    columns: &partition_columns
+    description: Customer SCD2 history across the selected complete snapshots.
+    columns:
+      - name: mandant
+        tests: [not_null]
+      - name: customer_id
+        tests: [not_null]
+      - name: stichtag
+        tests: [not_null]
+      - name: valid_from
+        tests: [not_null]
+      - name: is_current
+        tests: [not_null]
+  - name: account
+    description: Account SCD2 history across the selected complete snapshots.
+    columns:
+      - name: mandant
+        tests: [not_null]
+      - name: account_id
+        tests: [not_null]
+      - name: stichtag
+        tests: [not_null]
+      - name: valid_from
+        tests: [not_null]
+      - name: is_current
+        tests: [not_null]
+  - name: transaction
+    description: Transaction rows selected for one mandant and reporting dates.
+    columns:
       - name: mandant
         tests: [not_null]
       - name: stichtag
         tests: [not_null]
-  - name: account
-    description: Account rows selected for one mandant and reporting dates.
-    columns: *partition_columns
-  - name: transaction
-    description: Transaction rows selected for one mandant and reporting dates.
-    columns: *partition_columns

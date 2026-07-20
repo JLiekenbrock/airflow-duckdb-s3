@@ -6,4 +6,4 @@ logs/
 target/
 dbt_packages/
 *.duckdb
-
+.user.yml
