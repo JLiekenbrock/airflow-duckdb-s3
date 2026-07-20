@@ -1,0 +1,53 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: duckdb-dbt-build-m001
+  labels:
+    app.kubernetes.io/name: airflow-duckdb-s3
+    app.kubernetes.io/component: dbt-job
+spec:
+  backoffLimit: 2
+  ttlSecondsAfterFinished: 86400
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: airflow-duckdb-s3
+        app.kubernetes.io/component: dbt-job
+    spec:
+      restartPolicy: Never
+      serviceAccountName: duckdb-s3-runner
+      containers:
+        - name: dbt
+          # Replace data-jobs with the project containing the ImageStream.
+          image: image-registry.openshift-image-registry.svc:5000/data-jobs/airflow-duckdb-s3:latest
+          imagePullPolicy: Always
+          command: ["python", "-m", "dbt"]
+          args:
+            - build
+            - --project-dir
+            - /opt/pipeline
+            - --profiles-dir
+            - /opt/pipeline
+            - --target
+            - openshift
+            - --vars
+            - >-
+              {"mandant":"m001","stichtage":["2026-07-31"],"run_id":"manual-2026-07-31"}
+          envFrom:
+            - secretRef:
+                name: duckdb-s3-credentials
+          resources:
+            requests:
+              cpu: 500m
+              memory: 1Gi
+            limits:
+              cpu: "2"
+              memory: 4Gi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+            runAsNonRoot: true
+            seccompProfile:
+              type: RuntimeDefault
+

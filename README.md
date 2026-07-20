@@ -47,6 +47,36 @@ OpenShift must be able to pull that image. The startup script's optional
 machine needs network access to the OpenShift API; the cluster needs access to
 the image registry and S3 endpoint.
 
+### Run dbt directly in OpenShift without Airflow
+
+The same pipeline image can run independently as an OpenShift Job or CronJob.
+Build the image into the current OpenShift project:
+
+```shell
+oc new-build --name=airflow-duckdb-s3 --binary --strategy=docker
+oc start-build airflow-duckdb-s3 --from-dir=. --follow
+```
+
+Edit the image namespace, `mandant`, and `stichtage` in the example, then apply
+and follow the one-off Job:
+
+```shell
+oc apply -f openshift/dbt-job.example.yaml
+oc logs -f job/duckdb-dbt-build-m001
+```
+
+For a daily schedule, edit the namespace, schedule, and `MANDANT`, then apply:
+
+```shell
+oc apply -f openshift/dbt-cronjob.example.yaml
+oc get cronjob duckdb-dbt-daily
+```
+
+The CronJob calculates yesterday's UTC date when its pod starts. It forbids
+overlapping runs, retains limited job history, and runs the complete `dbt
+build`, so model tests execute in the same pod. The Python base image provides
+GNU `date`; adapt the date expression if the base image changes.
+
 ## Quick start
 
 1. Copy `.env.example` to `.env` and edit the image, namespace and S3 values.

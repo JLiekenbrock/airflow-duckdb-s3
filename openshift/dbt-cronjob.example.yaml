@@ -1,0 +1,61 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: duckdb-dbt-daily
+  labels:
+    app.kubernetes.io/name: airflow-duckdb-s3
+    app.kubernetes.io/component: dbt-cronjob
+spec:
+  # Runs daily at 02:00 UTC. Set spec.timeZone when supported by your cluster.
+  schedule: "0 2 * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      ttlSecondsAfterFinished: 86400
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/name: airflow-duckdb-s3
+            app.kubernetes.io/component: dbt-cronjob
+        spec:
+          restartPolicy: Never
+          serviceAccountName: duckdb-s3-runner
+          containers:
+            - name: dbt
+              # Replace data-jobs with the project containing the ImageStream.
+              image: image-registry.openshift-image-registry.svc:5000/data-jobs/airflow-duckdb-s3:latest
+              imagePullPolicy: Always
+              command: ["/bin/sh", "-ec"]
+              args:
+                - |
+                  STICHTAG="$(date -u -d yesterday +%F)"
+                  RUN_ID="cron-$(date -u +%Y%m%dT%H%M%SZ)"
+                  exec python -m dbt build \
+                    --project-dir /opt/pipeline \
+                    --profiles-dir /opt/pipeline \
+                    --target openshift \
+                    --vars "{mandant: ${MANDANT}, stichtage: ['${STICHTAG}'], run_id: ${RUN_ID}}"
+              env:
+                - name: MANDANT
+                  value: m001
+              envFrom:
+                - secretRef:
+                    name: duckdb-s3-credentials
+              resources:
+                requests:
+                  cpu: 500m
+                  memory: 1Gi
+                limits:
+                  cpu: "2"
+                  memory: 4Gi
+              securityContext:
+                allowPrivilegeEscalation: false
+                capabilities:
+                  drop: ["ALL"]
+                runAsNonRoot: true
+                seccompProfile:
+                  type: RuntimeDefault
+
