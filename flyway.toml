@@ -1,0 +1,6 @@
+[flyway]
+locations = ["filesystem:migrations"]
+url = "jdbc:clickhouse://${CLICKHOUSE_HOST:-localhost}:${CLICKHOUSE_NATIVE_PORT:-9000}/default"
+user = "${CLICKHOUSE_USER:-default}"
+password = "${CLICKHOUSE_PASSWORD:-}"
+driver = "com.clickhouse.jdbc.ClickHouseDriver"

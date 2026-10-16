@@ -1,13 +1,11 @@
-name: airflow_duckdb_s3
+name: delta_clickhouse
 version: "0.1.0"
 config-version: 2
-profile: airflow_duckdb_s3
+profile: delta_clickhouse
+
 model-paths: ["models"]
-macro-paths: ["macros"]
 clean-targets: ["target", "dbt_packages"]
 
 models:
-  airflow_duckdb_s3:
-    +materialized: external
-    +format: parquet
-
+  delta_clickhouse:
+    +materialized: table
