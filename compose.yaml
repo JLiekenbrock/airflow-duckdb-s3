@@ -1,4 +1,34 @@
 services:
+  airflow:
+    build:
+      context: .
+      dockerfile: airflow/Dockerfile
+    depends_on:
+      clickhouse:
+        condition: service_healthy
+    ports:
+      - "8080:8080"
+    environment:
+      AIRFLOW__CORE__EXECUTOR: SequentialExecutor
+      AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+      AIRFLOW__CORE__DAGS_FOLDER: /opt/airflow/dags
+      AIRFLOW_HOME: /opt/airflow
+      CLICKHOUSE_HOST: clickhouse
+      CLICKHOUSE_PORT: 8123
+      CLICKHOUSE_NATIVE_PORT: 9000
+      CLICKHOUSE_USER: default
+      CLICKHOUSE_PASSWORD: "${CLICKHOUSE_PASSWORD:-poc}"
+      CLICKHOUSE_DATABASE: analytics
+      DELTA_S3_PATH: "${DELTA_S3_PATH:-s3://your-bucket/path/to/delta-table/}"
+      AWS_ACCESS_KEY_ID: "${AWS_ACCESS_KEY_ID:-}"
+      AWS_SECRET_ACCESS_KEY: "${AWS_SECRET_ACCESS_KEY:-}"
+      AWS_REGION: "${AWS_REGION:-eu-central-1}"
+      _AIRFLOW_WWW_USER_USERNAME: admin
+      _AIRFLOW_WWW_USER_PASSWORD: "${AIRFLOW_PASSWORD:-admin}"
+    volumes:
+      - airflow_state:/opt/airflow
+    command: standalone
+
   clickhouse:
     image: clickhouse/clickhouse-server:26.3
     ports:
@@ -13,3 +43,6 @@ services:
       interval: 5s
       timeout: 3s
       retries: 20
+
+volumes:
+  airflow_state:
