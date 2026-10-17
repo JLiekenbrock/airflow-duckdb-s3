@@ -118,6 +118,31 @@ The [recorded results](benchmarks/results.md) cover all 3,475,204 trips with the
 
 Benchmarks use dbt `threads=1`, ClickHouse `max_threads=4`, `max_insert_threads=1`, `async_insert=1`, `wait_for_async_insert=1`, and `lightweight_deletes_sync=2`. Run while other ingestion is idle. Caches are warm and background merges are not isolated. Wall time includes dbt startup; SQL time sums tagged initial queries and excludes setup/checks. Reported memory is the largest individual query, not total server memory. There is no concurrent-writer, crash-recovery, or async-on/off test.
 
+## Batching benchmark
+
+Trigger **`clickhouse_batching_benchmark`** after preparing the taxi source. It uses the same source/date/repeat parameters as the insert-strategy benchmark (default: January 2025, three trials). The range must be longer than seven days. Flyway creates the isolated `poc_insert_benchmark.batching` table.
+
+| Airflow scenario | Window size | Concurrent dbt workers |
+| --- | --- | ---: |
+| `whole_range` | Entire requested range | 1 |
+| `weekly_1`, `weekly_2`, `weekly_4` | Seven days, final window clipped | 1, 2, 4 |
+| `daily_1`, `daily_2`, `daily_4` | One day | 1, 2, 4 |
+
+Every trial starts with an empty benchmark table and loads the **same complete range**. Scenarios run sequentially; a bounded Python executor inside each scenario starts concurrent dbt operations. Airflow shows each scenario as a task, with aggregate trial results in its log. Individual windows are worker operations, not separate Airflow tasks.
+
+`benchmarks/macros/load_window.sql` replaces each disjoint date window with `DELETE` followed by `INSERT … SELECT` from the full-range taxi staging view. This keeps the SQL operation fixed while varying size and concurrency. It avoids the shared temporary tables used by concurrent adapter incremental materializations. The two statements are not atomic. This measures initial window loading, not adapter strategy performance, retries, or replay recovery; those concerns remain separate from this benchmark.
+
+The final report compares total wall time, throughput, summed SQL time, largest-query memory, post-load active parts, and correctness (row count, distinct trip IDs, total cents). Wall time includes dbt startup but excludes Airflow queueing and setup/checks. Summed SQL time can exceed elapsed time under concurrency. Per-query memory is **not** peak server memory; active parts are a snapshot affected by background merges, not a count of parts created or a measure of merge cost. Sustained merge pressure needs a longer production-scale test.
+
+```sh
+docker compose cp airflow:/opt/airflow/logs/batching_benchmark/results.md benchmarks/batching_results.md
+docker compose cp airflow:/opt/airflow/logs/batching_benchmark/results.json benchmarks/batching_results.json
+```
+
+Run this with the other benchmarks and imports idle: they share the staging view and server. Each query keeps `max_threads=4`, `max_insert_threads=1`; four concurrent queries can therefore consume more total resources. Date windows contain variable row counts. The benchmark does not split into exact 100k-row client batches, impose an insert-per-second rate, or compare async modes. Results are written only when you run it; no batching measurements are bundled yet.
+
+For production, use a shared **Airflow pool** to queue ingestion tasks across DAGs, initially with one slot. A slot limits tasks, not internal worker queries or inserts per second: this benchmark deliberately controls its workers inside a single scenario task. ClickHouse memory/concurrency limits provide additional server protection; they do not replace Airflow's queue. Increase production concurrency only after measuring the server impact.
+
 ## Bulk loads, partitions, and concurrency
 
 Keep one date-window load at a time initially. ClickHouse can parallelize work inside a query even when Airflow permits only one task and dbt has `threads=1`. Benchmark additional concurrent loads only when CPU, memory, disk, and merges have spare capacity. Other ingestion DAGs need a shared Airflow pool to coordinate access to the same server. Task limits do not cancel queries that remain server-side after a disconnect.
