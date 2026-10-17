@@ -1,6 +1,26 @@
 version: 2
 
 models:
+  - name: stg_delta_events
+    description: Incoming events validated before loading into the incremental table.
+    columns:
+      - name: tenant_id
+        tests:
+          - not_null
+      - name: event_id
+        tests:
+          - not_null
+      - name: event_date
+        tests:
+          - not_null
+      - name: event_type
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['page_view', 'purchase']
+      - name: user_id
+        tests:
+          - not_null
   - name: delta_events
     description: Events loaded from the selected date window in the Delta Lake table.
     columns:

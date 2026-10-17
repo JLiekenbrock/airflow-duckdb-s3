@@ -6,6 +6,7 @@ from pathlib import Path
 
 from airflow import DAG
 from airflow.decorators import task, task_group
+from airflow.operators.empty import EmptyOperator
 from airflow.operators.python import get_current_context
 from cosmos import DbtTaskGroup, ProfileConfig, ProjectConfig, RenderConfig
 from cosmos.constants import TestBehavior
@@ -45,6 +46,22 @@ def set_batch_vars(context, operator):
         "--target-path",
         f"/tmp/dbt-target-{batch['batch_id']}",
     ]
+
+
+def cosmos_models(group_id, model):
+    return DbtTaskGroup(
+        group_id=group_id,
+        project_config=dbt_project,
+        profile_config=dbt_profile,
+        render_config=RenderConfig(
+            select=[model],
+            test_behavior=TestBehavior.AFTER_EACH,
+        ),
+        operator_args={
+            "interceptors": [set_batch_vars],
+            "retries": 2,
+        },
+    )
 
 
 with DAG(
@@ -132,22 +149,19 @@ with DAG(
         )
         shutil.rmtree(f"/tmp/dbt-target-{batch['batch_id']}", ignore_errors=True)
 
-    @task_group(group_id="dbt_tenant_batch")
-    def dbt_tenant_batch(batch):
-        models = DbtTaskGroup(
-            group_id="models",
-            project_config=dbt_project,
-            profile_config=dbt_profile,
-            render_config=RenderConfig(test_behavior=TestBehavior.AFTER_EACH),
-            operator_args={
-                "interceptors": [set_batch_vars],
-                "retries": 2,
-            },
-        )
+    @task_group(group_id="dbt_stage_batch")
+    def dbt_stage_batch(batch):
+        cosmos_models("stage", "stg_delta_events")
+
+    @task_group(group_id="dbt_build_batch")
+    def dbt_build_batch(batch):
+        models = cosmos_models("build", "delta_events")
         cleanup = drop_stage_view(batch)
         models >> cleanup
 
     batches = make_tenant_batches()
-    dbt_batches = dbt_tenant_batch.expand(batch=batches)
+    stages = dbt_stage_batch.expand(batch=batches)
+    builds = dbt_build_batch.expand(batch=batches)
+    all_batches_validated = EmptyOperator(task_id="all_batches_validated")
 
-    seed >> migrate() >> dbt_batches
+    seed >> migrate() >> stages >> all_batches_validated >> builds
