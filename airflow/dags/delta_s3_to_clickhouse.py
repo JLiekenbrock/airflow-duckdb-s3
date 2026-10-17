@@ -6,10 +6,7 @@ import subprocess
 import urllib.request
 from pathlib import Path
 
-from airflow import DAG
-from airflow.decorators import task, task_group
-from airflow.operators.empty import EmptyOperator
-from airflow.operators.python import get_current_context
+from airflow.sdk import DAG, get_current_context, task, task_group
 from cosmos import DbtTaskGroup, ExecutionConfig, ProfileConfig, ProjectConfig, RenderConfig
 from cosmos.constants import TestBehavior
 
@@ -25,7 +22,6 @@ DEMO_ROWS = [
     for tenant_id in range(1, 801)
 ]
 
-DEFAULT_TENANT_BATCH_SIZE = 25
 DBT_PROJECT_PATH = Path("/opt/dbt")
 DBT_EXECUTABLE = "/home/airflow/dbt-venv/bin/dbt"
 
@@ -40,40 +36,51 @@ dbt_profile = ProfileConfig(
 )
 
 
-def set_batch_vars(context, operator):
-    """Pass the mapped tenant/date window into each Cosmos dbt task."""
-    batches = context["ti"].xcom_pull(task_ids="make_tenant_batches")
-    batch = batches[context["ti"].map_index]
-    operator.vars = batch
+def set_dbt_vars(context, operator):
+    """Pass this mapped daily window to each Cosmos task."""
+    windows = context["ti"].xcom_pull(task_ids="make_windows")
+    operator.vars = windows[context["ti"].map_index]
 
 
-def cosmos_models(group_id, model):
+def cosmos_models():
     return DbtTaskGroup(
-        group_id=group_id,
+        group_id="dbt_lineage",
         project_config=dbt_project,
         profile_config=dbt_profile,
         execution_config=ExecutionConfig(dbt_executable_path=DBT_EXECUTABLE),
         render_config=RenderConfig(
-            select=[model],
+            select=["+delta_events"],
             test_behavior=TestBehavior.AFTER_EACH,
         ),
         operator_args={
-            "interceptors": [set_batch_vars],
+            "interceptors": [set_dbt_vars],
             "retries": 2,
+            "retry_exponential_backoff": True,
         },
     )
 
 
 with DAG(
     dag_id="delta_s3_to_clickhouse",
+    doc_md=(
+        "## Delta to ClickHouse\n\n"
+        "Airflow maps independent daily windows. Each window contains a Cosmos dbt lineage: "
+        "staging model and input tests → final model and its uniqueness check → stage-view cleanup.\n\n"
+        "Each dbt task retries twice. A failed window does not block other windows. One task runs at a time "
+        "to limit ClickHouse load. The final success gate requires every window to succeed.\n\n"
+        "Flyway applies versioned ClickHouse DDL before dbt runs. Cosmos runs dbt models and "
+        "their tests as Airflow tasks. Both read the ClickHouse host and credentials from the "
+        "same `CLICKHOUSE_*` environment settings."
+    ),
     start_date=datetime(2026, 1, 1),
     schedule=None,
     catchup=False,
+    max_active_runs=1,
+    max_active_tasks=1,
     params={
         "start_date": "2026-10-12",
         "end_date": "2026-10-19",
         "tenant_ids": list(range(1, 801)),
-        "tenant_batch_size": DEFAULT_TENANT_BATCH_SIZE,
     },
     tags=["dbt", "clickhouse", "delta-lake"],
 ) as dag:
@@ -100,10 +107,8 @@ with DAG(
             },
         )
 
-    seed = seed_local_delta()
-
     @task
-    def migrate():
+    def flyway_migrate():
         flyway_env = os.environ.copy()
         flyway_env.update(
             {
@@ -123,36 +128,52 @@ with DAG(
         )
 
     @task
-    def make_tenant_batches():
-        context = get_current_context()
-        params = context["params"]
-        tenant_ids = list(dict.fromkeys(int(tenant_id) for tenant_id in params["tenant_ids"]))
+    def validate_run_config():
+        """Validate and normalize the single date/tenant selection for dbt."""
+        params = get_current_context()["params"]
+        tenant_ids = params["tenant_ids"]
+        if not isinstance(tenant_ids, list):
+            raise ValueError("tenant_ids must be a list of integers")
+        if any(isinstance(tenant_id, bool) for tenant_id in tenant_ids):
+            raise ValueError("tenant_ids must contain integers, not booleans")
+        try:
+            tenant_ids = list(dict.fromkeys(int(tenant_id) for tenant_id in tenant_ids))
+            start_date = date.fromisoformat(params["start_date"])
+            end_date = date.fromisoformat(params["end_date"])
+        except (TypeError, ValueError) as error:
+            raise ValueError("Provide valid ISO dates and integer tenant_ids") from error
         if not tenant_ids:
             raise ValueError("Provide at least one tenant_id in the DAG run configuration")
         if any(tenant_id < 0 for tenant_id in tenant_ids):
             raise ValueError("tenant_ids must be non-negative integers")
-        if params["start_date"] >= params["end_date"]:
+        if start_date >= end_date:
             raise ValueError("end_date must be later than start_date")
-        batch_size = int(params["tenant_batch_size"])
-        if batch_size < 1:
-            raise ValueError("tenant_batch_size must be a positive integer")
+        return {
+            "start_date": start_date.isoformat(),
+            "end_date": end_date.isoformat(),
+            "tenant_ids": tenant_ids,
+        }
 
+    @task
+    def make_windows(run_config):
+        start = date.fromisoformat(run_config["start_date"])
+        end = date.fromisoformat(run_config["end_date"])
         return [
             {
-                "batch_id": f"batch_{index:03d}",
-                "tenant_ids": tenant_ids[offset : offset + batch_size],
-                "start_date": params["start_date"],
-                "end_date": params["end_date"],
+                **run_config,
+                "start_date": (start + timedelta(days=offset)).isoformat(),
+                "end_date": (start + timedelta(days=offset + 1)).isoformat(),
+                "batch_id": (start + timedelta(days=offset)).strftime("day_%Y%m%d"),
             }
-            for index, offset in enumerate(range(0, len(tenant_ids), batch_size))
+            for offset in range((end - start).days)
         ]
 
-    @task(retries=1)
-    def drop_stage_view(batch):
-        batch_id = batch["batch_id"]
+    @task(retries=1, trigger_rule="all_done")
+    def drop_stage_view(window):
         database = os.environ["CLICKHOUSE_DATABASE"]
-        if not re.fullmatch(r"batch_\d{3}", batch_id) or not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", database):
-            raise ValueError("Invalid batch or database identifier")
+        batch_id = window["batch_id"]
+        if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", database) or not re.fullmatch(r"day_\d{8}", batch_id):
+            raise ValueError("Invalid database or batch identifier")
 
         query = f"DROP VIEW IF EXISTS `{database}`.`stg_delta_events_{batch_id}`"
         credentials = base64.b64encode(
@@ -167,19 +188,26 @@ with DAG(
         with urllib.request.urlopen(request, timeout=30) as response:
             response.read()
 
-    @task_group(group_id="dbt_stage_batch")
-    def dbt_stage_batch(batch):
-        cosmos_models("stage", "stg_delta_events")
-
-    @task_group(group_id="dbt_build_batch")
-    def dbt_build_batch(batch):
-        models = cosmos_models("build", "delta_events")
-        cleanup = drop_stage_view(batch)
+    @task_group
+    def process_window(window):
+        models = cosmos_models()
+        cleanup = drop_stage_view(window)
         models >> cleanup
 
-    batches = make_tenant_batches()
-    stages = dbt_stage_batch.expand(batch=batches)
-    builds = dbt_build_batch.expand(batch=batches)
-    all_batches_validated = EmptyOperator(task_id="all_batches_validated")
+    @task
+    def all_windows_succeeded():
+        """Only succeed when every processing task and cleanup succeeded."""
 
-    seed >> migrate() >> stages >> all_batches_validated >> builds
+    run_config = validate_run_config()
+    seed = seed_local_delta()
+    migrate = flyway_migrate()
+    windows = make_windows(run_config)
+    process_window.expand(window=windows)
+
+    run_config >> seed >> migrate >> windows
+
+    # Include model/test failures directly: all_done cleanup must not mask them.
+    processing_tasks = list(dag.tasks)
+    completion = all_windows_succeeded()
+    for processing_task in processing_tasks:
+        processing_task >> completion

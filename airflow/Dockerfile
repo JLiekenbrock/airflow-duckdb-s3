@@ -1,4 +1,4 @@
-FROM apache/airflow:2.10.4
+FROM apache/airflow:3.3.2
 
 USER root
 RUN apt-get update && apt-get install -y --no-install-recommends default-jre-headless curl ca-certificates && rm -rf /var/lib/apt/lists/*
@@ -6,7 +6,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends default-jre-hea
 USER airflow
 COPY requirements.txt /requirements.txt
 RUN pip install --no-cache-dir \
-    --constraint "https://raw.githubusercontent.com/apache/airflow/constraints-2.10.4/constraints-3.12.txt" \
+    --constraint "https://raw.githubusercontent.com/apache/airflow/constraints-3.3.2/constraints-3.13.txt" \
     -r /requirements.txt
 COPY dbt-requirements.txt /dbt-requirements.txt
 RUN python -m venv /home/airflow/dbt-venv \
@@ -24,4 +24,5 @@ ENV FLYWAY_LOCATIONS="filesystem:/opt/dbt/migrations"
 COPY dbt_project.yml profiles.yml flyway.toml /opt/dbt/
 COPY migrations /opt/dbt/migrations
 COPY models /opt/dbt/models
+COPY tests /opt/dbt/tests
 COPY airflow/dags /opt/airflow/dags

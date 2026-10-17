@@ -1,6 +1,6 @@
 # S3 Delta Lake to ClickHouse with dbt
 
-Small proof of concept based on the original Airflow + DuckDB S3 project. Airflow writes sample events to a local MinIO bucket as a Delta Lake table, then runs Flyway and `dbt build` to load a selected date window into ClickHouse.
+Small proof of concept based on the original Airflow + DuckDB S3 project. Airflow writes sample events to a local MinIO bucket as a Delta Lake table, then uses Flyway and Cosmos-rendered dbt tasks to validate and load a selected date window into ClickHouse.
 
 ## Requirements
 
@@ -13,22 +13,34 @@ cp .env.example .env
 docker compose up -d --build
 ```
 
-Open Airflow at <http://localhost:8080> and sign in with `admin` / `AIRFLOW_PASSWORD` (defaults to `admin`). Trigger `delta_s3_to_clickhouse` with the default parameters, or pass a weekly half-open date range and the tenant IDs for that week as DAG run configuration, for example:
+Open Airflow 3 at <http://localhost:8083>. Sign in as `admin`; Airflow 3 generates its password on first startup. Retrieve it with `docker compose exec airflow cat /opt/airflow/simple_auth_manager_passwords.json.generated`. The local setup uses Airflow 3's `LocalExecutor` with SQLite and a single task slot. Trigger `delta_s3_to_clickhouse` with the default parameters, or pass a weekly half-open date range and the tenant IDs for that week as DAG run configuration, for example:
 
 ```json
-{"start_date": "2026-10-12", "end_date": "2026-10-19", "tenant_ids": [101, 202], "tenant_batch_size": 25}
+{"start_date": "2026-10-12", "end_date": "2026-10-19", "tenant_ids": [101, 202]}
 ```
 
-Airflow seeds 800 small sample tenants by default and splits `tenant_ids` into batches of `tenant_batch_size` (default 25). This creates 32 mapped Cosmos staging groups. Each group creates its own staging view and runs dbt tests against that incoming batch. A single `all_batches_validated` barrier prevents any final-table loads until every batch passes. Then 32 mapped Cosmos build groups load the data, run final-table tests, and drop their staging views. Expand groups in Airflow's Graph view to inspect dbt model/test order. Cosmos dbt tasks retry twice. The local Compose setup uses Airflow's `SequentialExecutor`; each mapped group uses a separate dbt target directory. The date range is start-inclusive and end-exclusive.
+Airflow seeds 800 sample tenants by default and maps the selected date range into independent daily `process_window` groups. Each contains a Cosmos group rendering `+delta_events`: staging model/input tests → incremental model/destination uniqueness check → cleanup. A failed input test blocks only that day's load; other days continue. Each dbt task retries twice with exponential backoff. Expand the mapped groups in Airflow to inspect individual days and retry their failed tasks. One active DAG run and one active task limit ClickHouse concurrency. The date range is start-inclusive and end-exclusive.
 
-The DAG seeds a Delta table at `http://minio:9000/poc/delta/events/` (MinIO console: <http://localhost:9003>; S3 API: <http://localhost:9002>), runs Flyway, validates all tenant batches, then processes the selected date window. The high-level order is `seed_local_delta` → `migrate` → mapped `dbt_stage_batch` → `all_batches_validated` → mapped `dbt_build_batch`. dbt tests attached to `stg_delta_events` validate incoming rows before the barrier; the final model's tests check loaded data after each build.
+The DAG validates the run parameters, writes the Delta table at `http://minio:9000/poc/delta/events/` (MinIO console: <http://localhost:9003>; S3 API: <http://localhost:9002>), runs Flyway, then creates daily windows. Each window has its own staging view. Cleanup runs even if a dbt task fails. The final `all_windows_succeeded` task depends on every processing task so cleanup cannot hide a failure: all days are attempted, but the overall run remains failed if any task exhausts its retries. Validation, seeding, or migration failures block processing because all windows need those prerequisites.
 
 There are two partition controls in this POC:
 
-- **Which data gets processed:** set `start_date`, `end_date`, and `tenant_ids` in the Airflow DAG run configuration. The staging model filters by both the half-open date range and the tenant batch before the final model runs.
+- **Which data gets processed:** set `start_date`, `end_date`, and `tenant_ids` in the Airflow DAG run configuration. The staging model filters by the half-open date range and the tenant list before the final model runs.
 - **How data is stored:** the seed task writes the Delta table partitioned by `event_date`; the ClickHouse model stores data in monthly partitions using `toYYYYMM(event_date)`. Change `partition_by` in `airflow/dags/delta_s3_to_clickhouse.py` or `models/delta_events.sql` to use a different partition key/granularity. For daily ClickHouse partitions, for example, use `toYYYYMMDD(event_date)`.
 
 Basic dbt tests in `models/schema.yml` check that tenant/event IDs and required columns are non-null, `(tenant_id, event_id)` pairs are unique, and event types are among the sample values. Flyway connects over ClickHouse's native TCP port `9000`; dbt connects over HTTP port `8123`. Flyway creates the `analytics` database and defines `analytics.delta_events` in `migrations/V2__create_delta_events.sql`; dbt maintains its incremental contents in `models/delta_events.sql`. The sample data and local MinIO credentials are for local development only.
+
+## Production insert sizing
+
+This POC permits one active task at a time. Its incremental model uses the dbt-clickhouse adapter to issue a set-based `INSERT … SELECT` from the Delta-backed staging view; ClickHouse processes the selected rows as a bulk query. dbt does not buffer rows into client-side insert batches in this flow. Bulk sizing matters most when an application or loader sends individual `INSERT` requests: ClickHouse recommends at least 1,000 rows per insert, ideally 10,000–100,000, and around one synchronous insert query per second. Larger batches reduce part creation and background merge work. If the source cannot be batched on the client, consider ClickHouse asynchronous inserts.
+
+Airflow owns the daily windows and retries; dbt uses the ordinary `delete+insert` incremental strategy for each window. This gives each day visible status and independent retries without nesting dbt microbatches inside Airflow batches. Row counts per day are unbounded, so size production windows from representative load measurements. Airflow's mapped-task count is also limited by `max_map_length` (normally 1,024); submit longer historical backfills in smaller date ranges. See [ClickHouse bulk insert guidance](https://clickhouse.com/docs/concepts/features/operations/insert/bulkinserts) and [dbt-clickhouse incremental strategies](https://clickhouse.com/docs/integrations/data-ingestion/etl-tools/dbt/materializations).
+
+## Load concurrency
+
+Start with one daily load at a time. The DAG sets `max_active_runs=1` and `max_active_tasks=1`, preserving separate daily tasks for visibility and retries while limiting concurrent work. ClickHouse can still execute a single load using multiple threads internally; Airflow's task limit and dbt's `threads: 1` do not restrict a ClickHouse query to one CPU thread. See [ClickHouse query parallelism](https://clickhouse.com/docs/concepts/core-concepts/query-parallelism).
+
+Multiple concurrent loads can improve throughput when one load leaves spare capacity, such as while waiting on S3. They can also increase contention for CPU, memory, disk, and background merges. Benchmark one load first, then two, and increase concurrency only if total throughput improves while normal query latency and merge backlog remain acceptable. The DAG limits apply only to this DAG: use a shared Airflow pool across ingestion DAGs targeting the same ClickHouse instance. These limits constrain submitted tasks, so also account for queries that continue server-side after a client disconnect and for background merge work.
 
 To inspect the loaded result, connect to ClickHouse at `localhost:8123` and query `analytics.delta_events`.
 
