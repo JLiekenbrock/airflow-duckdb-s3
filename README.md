@@ -2,6 +2,30 @@
 
 Small proof of concept based on the original Airflow + DuckDB S3 project. Airflow writes sample events to a local MinIO bucket as a Delta Lake table, then uses Flyway and Cosmos-rendered dbt tasks to validate and load a selected date window into ClickHouse.
 
+## How the tools work together
+
+| Tool | Responsibility in this repo |
+| --- | --- |
+| Airflow | Runs the workflow, passes dates and tenant IDs to dbt, and controls retries and concurrency. The separate backfill DAG reuses the main DAG with different date parameters. |
+| Flyway | Applies versioned migrations that create the destination database and table before dbt runs. |
+| dbt + Cosmos | dbt defines SQL models, dependencies through `ref()`, and data tests. Cosmos turns those dependencies into Airflow model and test tasks. |
+| ClickHouse | Executes the SQL, reads the Delta data from S3/MinIO, and stores the loaded rows. |
+
+The staging model creates a ClickHouse view over `deltaLake(...)`, filtered by the requested dates and tenants. The final incremental model reads it using `ref('stg_delta_events')`. dbt submits the SQL to ClickHouse; ClickHouse reads and transforms the data directly. Transaction rows do not pass through the Airflow worker's Python memory during this load.
+
+## ClickHouse table names
+
+A fully qualified name is **`database.table`**. `CLICKHOUSE_DATABASE` in `compose.yaml` is currently `analytics`; `profiles.yml` reads that value as dbt's `schema`, which the ClickHouse adapter uses as the database name. By default, the model filename determines the table or view name:
+
+| dbt model | ClickHouse name | Type |
+| --- | --- | --- |
+| `models/stg_delta_events.sql` | `analytics.stg_delta_events` | View managed by dbt |
+| `models/delta_events.sql` | `analytics.delta_events` | Destination table created by Flyway and loaded incrementally by dbt |
+
+To override a model's table name, add an `alias` to its existing `config()` block, for example `alias='transactions'`. The model `delta_events` would then target `analytics.transactions`. References still use the model name, such as `ref('delta_events')`; dbt resolves the alias automatically.
+
+Flyway defines the destination table in `migrations/V2__create_delta_events.sql`. Its database and table name must match dbt's resolved destination name. Changing `CLICKHOUSE_DATABASE` or a model alias does not rename the hardcoded destination in an existing migration. Add a new Flyway migration for an existing deployment and update the dbt configuration together; do not edit an already applied migration. Keep the Flyway table definition and dbt's engine, sorting, and partition settings consistent.
+
 ## Requirements
 
 - Docker Compose
