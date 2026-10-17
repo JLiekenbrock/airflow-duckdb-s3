@@ -1,4 +1,4 @@
-{{ config(materialized='view', alias='stg_delta_events_' ~ var('batch_id', 'default')) }}
+{{ config(materialized='view') }}
 
 {% set start_date = var('start_date', '1970-01-01') %}
 {% set end_date = var('end_date', '9999-12-31') %}

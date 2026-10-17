@@ -1,12 +1,9 @@
-import base64
 from datetime import date, datetime, timedelta
 import os
-import re
 import subprocess
-import urllib.request
 from pathlib import Path
 
-from airflow.sdk import DAG, get_current_context, task, task_group
+from airflow.sdk import DAG, get_current_context, task
 from cosmos import DbtTaskGroup, ExecutionConfig, ProfileConfig, ProjectConfig, RenderConfig
 from cosmos.constants import TestBehavior
 
@@ -37,38 +34,18 @@ dbt_profile = ProfileConfig(
 
 
 def set_dbt_vars(context, operator):
-    """Pass this mapped window to each Cosmos task."""
-    windows = context["ti"].xcom_pull(task_ids="make_windows")
-    operator.vars = windows[context["ti"].map_index]
-
-
-def cosmos_models():
-    return DbtTaskGroup(
-        group_id="dbt_lineage",
-        project_config=dbt_project,
-        profile_config=dbt_profile,
-        execution_config=ExecutionConfig(dbt_executable_path=DBT_EXECUTABLE),
-        render_config=RenderConfig(
-            select=["+delta_events"],
-            test_behavior=TestBehavior.AFTER_EACH,
-        ),
-        operator_args={
-            "interceptors": [set_dbt_vars],
-            "retries": 2,
-            "retry_exponential_backoff": True,
-        },
-    )
+    """Pass the validated date range and tenants to every dbt task."""
+    operator.vars = context["ti"].xcom_pull(task_ids="validate_run_config")
 
 
 with DAG(
     dag_id="delta_s3_to_clickhouse",
     doc_md=(
         "## Delta to ClickHouse\n\n"
-        "Airflow maps independent windows: days_per_batch=1 for daily loads, or 7 for weekly backfills. "
-        "Each window contains a Cosmos dbt lineage: "
-        "staging model and input tests → final model and its uniqueness check → stage-view cleanup.\n\n"
-        "Each dbt task retries twice. A failed window does not block other windows. One task runs at a time "
-        "to limit ClickHouse load. The final success gate requires every window to succeed.\n\n"
+        "One run loads one date range for all selected tenants. Cosmos renders the dbt ref() dependencies: "
+        "staging model and input tests → final model and its uniqueness check.\n\n"
+        "Each dbt task retries twice. One run and one task execute at a time to limit ClickHouse load. "
+        "Use delta_s3_to_clickhouse_backfill to split a historical range into independent runs of this DAG.\n\n"
         "Flyway applies versioned ClickHouse DDL before dbt runs. Cosmos runs dbt models and "
         "their tests as Airflow tasks. Both read the ClickHouse host and credentials from the "
         "same `CLICKHOUSE_*` environment settings."
@@ -82,7 +59,6 @@ with DAG(
         "start_date": "2026-10-12",
         "end_date": "2026-10-19",
         "tenant_ids": list(range(1, 801)),
-        "days_per_batch": 1,
     },
     tags=["dbt", "clickhouse", "delta-lake"],
 ) as dag:
@@ -133,9 +109,6 @@ with DAG(
     def validate_run_config():
         """Validate and normalize the single date/tenant selection for dbt."""
         params = get_current_context()["params"]
-        days_per_batch = params["days_per_batch"]
-        if type(days_per_batch) is not int or days_per_batch < 1:
-            raise ValueError("days_per_batch must be a positive integer")
         tenant_ids = params["tenant_ids"]
         if not isinstance(tenant_ids, list):
             raise ValueError("tenant_ids must be a list of integers")
@@ -157,64 +130,25 @@ with DAG(
             "start_date": start_date.isoformat(),
             "end_date": end_date.isoformat(),
             "tenant_ids": tenant_ids,
-            "days_per_batch": days_per_batch,
         }
-
-    @task
-    def make_windows(run_config):
-        start = date.fromisoformat(run_config["start_date"])
-        end = date.fromisoformat(run_config["end_date"])
-        days_per_batch = run_config["days_per_batch"]
-        return [
-            {
-                **run_config,
-                "start_date": (start + timedelta(days=offset)).isoformat(),
-                "end_date": (start + timedelta(days=min(offset + days_per_batch, (end - start).days))).isoformat(),
-                "batch_id": (start + timedelta(days=offset)).strftime("window_%Y%m%d"),
-            }
-            for offset in range(0, (end - start).days, days_per_batch)
-        ]
-
-    @task(retries=1, trigger_rule="all_done")
-    def drop_stage_view(window):
-        database = os.environ["CLICKHOUSE_DATABASE"]
-        batch_id = window["batch_id"]
-        if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", database) or not re.fullmatch(r"window_\d{8}", batch_id):
-            raise ValueError("Invalid database or batch identifier")
-
-        query = f"DROP VIEW IF EXISTS `{database}`.`stg_delta_events_{batch_id}`"
-        credentials = base64.b64encode(
-            f"{os.environ['CLICKHOUSE_USER']}:{os.environ['CLICKHOUSE_PASSWORD']}".encode()
-        ).decode()
-        request = urllib.request.Request(
-            f"http://{os.environ['CLICKHOUSE_HOST']}:{os.environ['CLICKHOUSE_PORT']}/",
-            data=query.encode(),
-            headers={"Authorization": f"Basic {credentials}"},
-            method="POST",
-        )
-        with urllib.request.urlopen(request, timeout=30) as response:
-            response.read()
-
-    @task_group
-    def process_window(window):
-        models = cosmos_models()
-        cleanup = drop_stage_view(window)
-        models >> cleanup
-
-    @task
-    def all_windows_succeeded():
-        """Only succeed when every processing task and cleanup succeeded."""
 
     run_config = validate_run_config()
     seed = seed_local_delta()
     migrate = flyway_migrate()
-    windows = make_windows(run_config)
-    process_window.expand(window=windows)
+    models = DbtTaskGroup(
+        group_id="dbt_lineage",
+        project_config=dbt_project,
+        profile_config=dbt_profile,
+        execution_config=ExecutionConfig(dbt_executable_path=DBT_EXECUTABLE),
+        render_config=RenderConfig(
+            select=["+delta_events"],
+            test_behavior=TestBehavior.AFTER_EACH,
+        ),
+        operator_args={
+            "interceptors": [set_dbt_vars],
+            "retries": 2,
+            "retry_exponential_backoff": True,
+        },
+    )
 
-    run_config >> seed >> migrate >> windows
-
-    # Include model/test failures directly: all_done cleanup must not mask them.
-    processing_tasks = list(dag.tasks)
-    completion = all_windows_succeeded()
-    for processing_task in processing_tasks:
-        processing_task >> completion
+    run_config >> seed >> migrate >> models
