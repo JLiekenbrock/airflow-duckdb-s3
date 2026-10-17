@@ -62,6 +62,77 @@ A dbt process starts Python, loads dbt and its adapter, reads the project/profil
 
 Let ClickHouse process each bulk `INSERT … SELECT` internally in blocks. Millions of rows in one date window do not require separate 100k-row dbt invocations. Smaller application windows are useful when they bound memory or make retries cheaper. If exact small chunks are needed, a dedicated database-client loader can process them within a longer-lived task while dbt retains transformations and validation; that alternative is not implemented here.
 
+## Example: separate customer/account and transaction DAGs
+
+One dbt project can contain models owned by different Airflow DAGs. Each DAG selects only its models. For example:
+
+```text
+models/
+├── customers.sql
+├── accounts.sql
+├── transactions.sql
+└── sources.yml
+```
+
+`sources.yml` declares existing ClickHouse source tables or views:
+
+```yaml
+version: 2
+sources:
+  - name: raw
+    schema: raw
+    tables:
+      - name: customers
+      - name: accounts
+      - name: transactions
+```
+
+`customers.sql`:
+
+```sql
+{{ config(materialized='table', tags=['customer_accounts']) }}
+
+select customer_id, customer_name
+from {{ source('raw', 'customers') }}
+```
+
+`accounts.sql`:
+
+```sql
+{{ config(materialized='table', tags=['customer_accounts']) }}
+
+select a.account_id, a.customer_id, c.customer_name
+from {{ source('raw', 'accounts') }} a
+join {{ ref('customers') }} c on a.customer_id = c.customer_id
+```
+
+`transactions.sql`:
+
+```sql
+{{ config(materialized='table', tags=['transactions']) }}
+
+select t.transaction_id, t.account_id, a.customer_id,
+       t.transaction_at, t.amount
+from {{ source('raw', 'transactions') }} t
+join {{ ref('accounts') }} a on t.account_id = a.account_id
+```
+
+Configure each Cosmos task group with its own selection:
+
+```python
+# DAG A: customers → accounts, with their tests
+RenderConfig(select=["tag:customer_accounts"])
+
+# DAG B: transactions, with its tests
+RenderConfig(select=["tag:transactions"])
+```
+
+**DAG B does not rerun customers or accounts.** `ref('accounts')` resolves the existing accounts relation and records the dependency; it does not automatically execute that model. The relation must already exist and contain the desired data. Airflow can trigger DAG B after DAG A succeeds to enforce freshness across workflows; dbt's dependency graph alone does not schedule another DAG.
+
+A leading `+` changes the selection: `+transactions` includes upstream models, potentially customers and accounts. The current taxi DAG uses `+nyc_taxi_trips` intentionally to include its staging model. Keep tags distinct and avoid ancestor selection in DAG B when DAG A owns those upstream models. Tests can read upstream relations without rebuilding them; indirect test selection can also include tests referencing selected models.
+
+This is an illustrative example, not additional runnable models or DAGs in this POC. It uses standard dbt `table` materializations for readability, which allow dbt to manage table creation/replacement. To follow this repo's Flyway ownership, define the destination DDL in migrations and use suitable incremental configurations, as the taxi model does.
+
 ## Actual taxi schema
 
 `analytics.nyc_taxi_trips` has 24 columns:
