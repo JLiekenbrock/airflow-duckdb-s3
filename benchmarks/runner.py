@@ -1,4 +1,4 @@
-"""Helpers for the Airflow insert benchmark; only touches poc_insert_benchmark tables."""
+"""Benchmark isolated taxi tables, using Flyway for schema setup."""
 
 import base64
 from datetime import date, timedelta
@@ -48,26 +48,28 @@ def prepare(params):
         "environments_default_user": env.get("CLICKHOUSE_USER", "default"),
         "environments_default_password": env.get("CLICKHOUSE_PASSWORD", ""),
     })
+    subprocess.run(["flyway", "migrate"], cwd=ROOT.parent, env=env, check=True)
     subprocess.run(["flyway", f"-locations=filesystem:{ROOT / 'migrations'}", "-table=flyway_insert_benchmark_history", "-baselineOnMigrate=true", "-baselineVersion=0", "migrate"], cwd=ROOT.parent, env=env, check=True)
     source = "deltaLake(" + ",".join(literal(v) for v in (config["source"], env["AWS_ACCESS_KEY_ID"], env["AWS_SECRET_ACCESS_KEY"])) + ")"
     expected = query(
-        "SELECT count() AS rows, uniqExact((tenant_id,event_id)) AS distinct_keys, sum(user_id) AS user_sum, "
-        f"countIf(event_date < toDate({literal(config['partial_end'])})) AS partial_rows FROM {source} "
-        f"WHERE event_date >= toDate({literal(config['start_date'])}) AND event_date < toDate({literal(config['end_date'])}) FORMAT JSONEachRow"
+        "SELECT count() AS rows, uniqExact(trip_id) AS distinct_keys, sum(toInt64(total_amount * 100)) AS total_cents, "
+        f"countIf(pickup_date < toDate({literal(config['partial_end'])}) AND isNotNull(total_amount)) AS partial_rows FROM {source} "
+        f"WHERE pickup_date >= toDate({literal(config['start_date'])}) AND pickup_date < toDate({literal(config['end_date'])}) FORMAT JSONEachRow"
     )[0]
     config["expected"] = {key: int(value) for key, value in expected.items()}
     if not config["expected"]["rows"] or config["expected"]["rows"] != config["expected"]["distinct_keys"]:
-        raise ValueError("Benchmark source must be nonempty with unique tenant/event keys")
+        raise ValueError("Benchmark source must be nonempty with unique trip IDs")
+    dbt_run(config, "delete_insert", config["end_date"], 0, "benchmark_stage", model="stg_nyc_taxi_trips")
     config["clickhouse_version"] = query("SELECT version() FORMAT JSONEachRow")[0]
     config["dbt_version"] = subprocess.check_output([DBT, "--version"], text=True)
     return config
 
 
-def dbt_run(config, case, end_date, revision, tag):
-    env = {**os.environ, "BENCHMARK_SOURCE": config["source"], "BENCHMARK_TAG": tag}
-    variables = {"case": case, "strategy": STRATEGIES[case], "start_date": config["start_date"], "end_date": end_date, "revision": revision}
+def dbt_run(config, case, end_date, revision, tag, model="taxi_insert_benchmark"):
+    env = {**os.environ, "BENCHMARK_TAG": tag}
+    variables = {"case": case, "strategy": STRATEGIES[case], "start_date": config["start_date"], "end_date": end_date, "revision": revision, "delta_s3_path": config["source"]}
     subprocess.run(
-        [DBT, "run", "--project-dir", str(ROOT), "--profiles-dir", str(ROOT), "--target-path", "/tmp/insert_benchmark/target", "--log-path", "/tmp/insert_benchmark/logs", "--select", "events", "--vars", json.dumps(variables)],
+        [DBT, "run", "--project-dir", str(ROOT), "--profiles-dir", str(ROOT), "--target-path", "/tmp/insert_benchmark/target", "--log-path", "/tmp/insert_benchmark/logs", "--select", model, "--vars", json.dumps(variables)],
         env=env, check=True, capture_output=True, text=True,
     )
 
@@ -89,10 +91,10 @@ def run_phase(config, case, phase):
         except subprocess.CalledProcessError as error:
             raise RuntimeError(f"{case}/{phase} dbt failed:\n{error.stdout[-3000:]}\n{error.stderr[-1000:]}") from error
         elapsed = time.monotonic() - started
-        actual = query(f"SELECT count() AS rows, uniqExact((tenant_id,event_id)) AS distinct_keys, sum(user_id) AS user_sum FROM {DATABASE}.{case} FORMAT JSONEachRow")[0]
-        expected = {key: config["expected"][key] for key in ("rows", "distinct_keys", "user_sum")}
+        actual = query(f"SELECT count() AS rows, uniqExact(trip_id) AS distinct_keys, sum(toInt64(total_amount * 100)) AS total_cents FROM {DATABASE}.{case} FORMAT JSONEachRow")[0]
+        expected = {key: config["expected"][key] for key in ("rows", "distinct_keys", "total_cents")}
         if partial:
-            expected["user_sum"] += config["expected"]["partial_rows"]
+            expected["total_cents"] += config["expected"]["partial_rows"] * 100
         actual = {key: int(value) for key, value in actual.items()}
         query("SYSTEM FLUSH LOGS")
         metrics = query(
@@ -124,7 +126,7 @@ def report(config, groups):
         if candidates:
             elapsed, strategy = min(candidates)
             lines.append(f"- {phase}: `{strategy}` ({elapsed:.3f} s).")
-    lines.extend(["", "Initial = full source into an empty precreated table. Replay = identical full source over a full baseline. Partial update = first seven days over a full baseline, with user_id increased by one; rows outside that week must survive.", "", "Correctness checks row count, exact distinct tenant/event count, and sum(user_id). Expected failures are benchmark outcomes, not Airflow execution failures. No fault injection or concurrent writers were tested.", "", "Warm local caches; phases run sequentially with repeated source scans. Wall time includes dbt process startup and materialization; SQL ms sums tagged initial queries and excludes setup and validation. Peak memory is the largest individual measured query, not total server memory. Background merges and cache effects are not isolated. Results apply to this narrow NYC event projection and local versions only.", ""])
+    lines.extend(["", "Initial = full source into an empty precreated table. Replay = identical full source over a full baseline. Partial update = first seven days over a full baseline, increasing each non-null total_amount by USD 1.00; other days must survive.", "", "Correctness checks row count, exact distinct trip IDs, and total_amount summed as integer cents. Expected failures are benchmark outcomes, not Airflow execution failures. No fault injection or concurrent writers were tested.", "", "Warm local caches; phases run sequentially with repeated source scans. Wall time includes dbt process startup and materialization; SQL ms sums tagged initial queries and excludes setup and validation. Peak memory is the largest individual measured query, not total server memory. Background merges and cache effects are not isolated. Results apply to the 24-column NYC taxi schema and local versions only.", ""])
     OUTPUT.mkdir(parents=True, exist_ok=True)
     (OUTPUT / "results.json").write_text(json.dumps({"config": config, "results": results}, indent=2) + "\n")
     markdown = "\n".join(lines)

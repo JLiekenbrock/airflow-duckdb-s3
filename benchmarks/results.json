@@ -1,6 +1,6 @@
 {
   "config": {
-    "source": "http://minio:9000/poc/delta/nyc_taxi/2025-01/",
+    "source": "http://minio:9000/poc/delta/nyc_taxi_trips/2025-01/",
     "start_date": "2025-01-01",
     "end_date": "2025-02-01",
     "repeats": 3,
@@ -8,7 +8,7 @@
     "expected": {
       "rows": 3475204,
       "distinct_keys": 3475204,
-      "user_sum": 6204723,
+      "total_cents": 8900441550,
       "partial_rows": 624467
     },
     "clickhouse_version": {
@@ -21,20 +21,20 @@
       "case": "append",
       "phase": "initial",
       "repetition": 1,
-      "wall_seconds": 2.587,
+      "wall_seconds": 3.4,
       "correct": true,
       "actual": {
         "rows": 3475204,
         "distinct_keys": 3475204,
-        "user_sum": 6204723
+        "total_cents": 8900441550
       },
       "expected": {
         "rows": 3475204,
         "distinct_keys": 3475204,
-        "user_sum": 6204723
+        "total_cents": 8900441550
       },
-      "sql_ms": 383,
-      "peak_query_bytes": 160781896,
+      "sql_ms": 1122,
+      "peak_query_bytes": 725970460,
       "written_rows": 3475204,
       "active_parts": 4
     },
@@ -42,20 +42,20 @@
       "case": "append",
       "phase": "initial",
       "repetition": 2,
-      "wall_seconds": 2.5,
+      "wall_seconds": 3.266,
       "correct": true,
       "actual": {
         "rows": 3475204,
         "distinct_keys": 3475204,
-        "user_sum": 6204723
+        "total_cents": 8900441550
       },
       "expected": {
         "rows": 3475204,
         "distinct_keys": 3475204,
-        "user_sum": 6204723
+        "total_cents": 8900441550
       },
-      "sql_ms": 340,
-      "peak_query_bytes": 159911390,
+      "sql_ms": 1008,
+      "peak_query_bytes": 680474780,
       "written_rows": 3475204,
       "active_parts": 4
     },
@@ -63,20 +63,20 @@
       "case": "append",
       "phase": "initial",
       "repetition": 3,
-      "wall_seconds": 2.524,
+      "wall_seconds": 3.317,
       "correct": true,
       "actual": {
         "rows": 3475204,
         "distinct_keys": 3475204,
-        "user_sum": 6204723
+        "total_cents": 8900441550
       },
       "expected": {
         "rows": 3475204,
         "distinct_keys": 3475204,
-        "user_sum": 6204723
+        "total_cents": 8900441550
       },
-      "sql_ms": 347,
-      "peak_query_bytes": 156473564,
+      "sql_ms": 1010,
+      "peak_query_bytes": 723032596,
       "written_rows": 3475204,
       "active_parts": 4
     },
@@ -84,83 +84,83 @@
       "case": "append",
       "phase": "replay",
       "repetition": 1,
-      "wall_seconds": 2.562,
+      "wall_seconds": 3.335,
       "correct": false,
       "actual": {
         "rows": 6950408,
         "distinct_keys": 3475204,
-        "user_sum": 12409446
+        "total_cents": 17800883100
       },
       "expected": {
         "rows": 3475204,
         "distinct_keys": 3475204,
-        "user_sum": 6204723
+        "total_cents": 8900441550
       },
-      "sql_ms": 349,
-      "peak_query_bytes": 160951326,
+      "sql_ms": 990,
+      "peak_query_bytes": 705244211,
       "written_rows": 3475204,
-      "active_parts": 3
+      "active_parts": 8
     },
     {
       "case": "append",
       "phase": "replay",
       "repetition": 2,
-      "wall_seconds": 2.577,
+      "wall_seconds": 3.34,
       "correct": false,
       "actual": {
         "rows": 6950408,
         "distinct_keys": 3475204,
-        "user_sum": 12409446
+        "total_cents": 17800883100
       },
       "expected": {
         "rows": 3475204,
         "distinct_keys": 3475204,
-        "user_sum": 6204723
+        "total_cents": 8900441550
       },
-      "sql_ms": 356,
-      "peak_query_bytes": 154797181,
+      "sql_ms": 1012,
+      "peak_query_bytes": 682581959,
       "written_rows": 3475204,
-      "active_parts": 3
+      "active_parts": 8
     },
     {
       "case": "append",
       "phase": "replay",
       "repetition": 3,
-      "wall_seconds": 2.562,
+      "wall_seconds": 3.445,
       "correct": false,
       "actual": {
         "rows": 6950408,
         "distinct_keys": 3475204,
-        "user_sum": 12409446
+        "total_cents": 17800883100
       },
       "expected": {
         "rows": 3475204,
         "distinct_keys": 3475204,
-        "user_sum": 6204723
+        "total_cents": 8900441550
       },
-      "sql_ms": 355,
-      "peak_query_bytes": 160993012,
+      "sql_ms": 1032,
+      "peak_query_bytes": 700134816,
       "written_rows": 3475204,
-      "active_parts": 3
+      "active_parts": 8
     },
     {
       "case": "append",
       "phase": "partial_update",
       "repetition": 1,
-      "wall_seconds": 2.265,
+      "wall_seconds": 2.501,
       "correct": false,
       "actual": {
         "rows": 4099671,
         "distinct_keys": 3475204,
-        "user_sum": 7944231
+        "total_cents": 10623985015
       },
       "expected": {
         "rows": 3475204,
         "distinct_keys": 3475204,
-        "user_sum": 6829190
+        "total_cents": 8962888250
       },
-      "sql_ms": 84,
-      "peak_query_bytes": 59808379,
+      "sql_ms": 211,
+      "peak_query_bytes": 234358693,
       "written_rows": 624467,
       "active_parts": 5
     },
@@ -168,20 +168,20 @@
       "case": "append",
       "phase": "partial_update",
       "repetition": 2,
-      "wall_seconds": 2.271,
+      "wall_seconds": 2.509,
       "correct": false,
       "actual": {
         "rows": 4099671,
         "distinct_keys": 3475204,
-        "user_sum": 7944231
+        "total_cents": 10623985015
       },
       "expected": {
         "rows": 3475204,
         "distinct_keys": 3475204,
-        "user_sum": 6829190
+        "total_cents": 8962888250
       },
-      "sql_ms": 83,
-      "peak_query_bytes": 59723094,
+      "sql_ms": 207,
+      "peak_query_bytes": 234360245,
       "written_rows": 624467,
       "active_parts": 5
     },
@@ -189,20 +189,20 @@
       "case": "append",
       "phase": "partial_update",
       "repetition": 3,
-      "wall_seconds": 2.274,
+      "wall_seconds": 2.527,
       "correct": false,
       "actual": {
         "rows": 4099671,
         "distinct_keys": 3475204,
-        "user_sum": 7944231
+        "total_cents": 10623985015
       },
       "expected": {
         "rows": 3475204,
         "distinct_keys": 3475204,
-        "user_sum": 6829190
+        "total_cents": 8962888250
       },
-      "sql_ms": 94,
-      "peak_query_bytes": 59726414,
+      "sql_ms": 213,
+      "peak_query_bytes": 234367669,
       "written_rows": 624467,
       "active_parts": 5
     },
@@ -210,20 +210,20 @@
       "case": "delete_insert",
       "phase": "initial",
       "repetition": 1,
-      "wall_seconds": 2.928,
+      "wall_seconds": 4.42,
       "correct": true,
       "actual": {
         "rows": 3475204,
         "distinct_keys": 3475204,
-        "user_sum": 6204723
+        "total_cents": 8900441550
       },
       "expected": {
         "rows": 3475204,
         "distinct_keys": 3475204,
-        "user_sum": 6204723
+        "total_cents": 8900441550
       },
-      "sql_ms": 639,
-      "peak_query_bytes": 159935661,
+      "sql_ms": 2037,
+      "peak_query_bytes": 721565472,
       "written_rows": 6950408,
       "active_parts": 4
     },
@@ -231,20 +231,20 @@
       "case": "delete_insert",
       "phase": "initial",
       "repetition": 2,
-      "wall_seconds": 2.807,
+      "wall_seconds": 4.36,
       "correct": true,
       "actual": {
         "rows": 3475204,
         "distinct_keys": 3475204,
-        "user_sum": 6204723
+        "total_cents": 8900441550
       },
       "expected": {
         "rows": 3475204,
         "distinct_keys": 3475204,
-        "user_sum": 6204723
+        "total_cents": 8900441550
       },
-      "sql_ms": 624,
-      "peak_query_bytes": 154816325,
+      "sql_ms": 2001,
+      "peak_query_bytes": 704964161,
       "written_rows": 6950408,
       "active_parts": 4
     },
@@ -252,20 +252,20 @@
       "case": "delete_insert",
       "phase": "initial",
       "repetition": 3,
-      "wall_seconds": 2.914,
+      "wall_seconds": 4.364,
       "correct": true,
       "actual": {
         "rows": 3475204,
         "distinct_keys": 3475204,
-        "user_sum": 6204723
+        "total_cents": 8900441550
       },
       "expected": {
         "rows": 3475204,
         "distinct_keys": 3475204,
-        "user_sum": 6204723
+        "total_cents": 8900441550
       },
-      "sql_ms": 617,
-      "peak_query_bytes": 150443297,
+      "sql_ms": 2030,
+      "peak_query_bytes": 721180981,
       "written_rows": 6950408,
       "active_parts": 4
     },
@@ -273,83 +273,83 @@
       "case": "delete_insert",
       "phase": "replay",
       "repetition": 1,
-      "wall_seconds": 3.42,
+      "wall_seconds": 4.612,
       "correct": true,
       "actual": {
         "rows": 3475204,
         "distinct_keys": 3475204,
-        "user_sum": 6204723
+        "total_cents": 8900441550
       },
       "expected": {
         "rows": 3475204,
         "distinct_keys": 3475204,
-        "user_sum": 6204723
+        "total_cents": 8900441550
       },
-      "sql_ms": 1175,
-      "peak_query_bytes": 156113476,
+      "sql_ms": 2265,
+      "peak_query_bytes": 700402776,
       "written_rows": 6950408,
-      "active_parts": 3
+      "active_parts": 8
     },
     {
       "case": "delete_insert",
       "phase": "replay",
       "repetition": 2,
-      "wall_seconds": 3.452,
+      "wall_seconds": 4.624,
       "correct": true,
       "actual": {
         "rows": 3475204,
         "distinct_keys": 3475204,
-        "user_sum": 6204723
+        "total_cents": 8900441550
       },
       "expected": {
         "rows": 3475204,
         "distinct_keys": 3475204,
-        "user_sum": 6204723
+        "total_cents": 8900441550
       },
-      "sql_ms": 1185,
-      "peak_query_bytes": 149612271,
+      "sql_ms": 2272,
+      "peak_query_bytes": 723198582,
       "written_rows": 6950408,
-      "active_parts": 3
+      "active_parts": 8
     },
     {
       "case": "delete_insert",
       "phase": "replay",
       "repetition": 3,
-      "wall_seconds": 3.358,
+      "wall_seconds": 4.621,
       "correct": true,
       "actual": {
         "rows": 3475204,
         "distinct_keys": 3475204,
-        "user_sum": 6204723
+        "total_cents": 8900441550
       },
       "expected": {
         "rows": 3475204,
         "distinct_keys": 3475204,
-        "user_sum": 6204723
+        "total_cents": 8900441550
       },
-      "sql_ms": 1161,
-      "peak_query_bytes": 160839735,
+      "sql_ms": 2260,
+      "peak_query_bytes": 681446090,
       "written_rows": 6950408,
-      "active_parts": 3
+      "active_parts": 8
     },
     {
       "case": "delete_insert",
       "phase": "partial_update",
       "repetition": 1,
-      "wall_seconds": 2.601,
+      "wall_seconds": 2.851,
       "correct": true,
       "actual": {
         "rows": 3475204,
         "distinct_keys": 3475204,
-        "user_sum": 6829190
+        "total_cents": 8962888250
       },
       "expected": {
         "rows": 3475204,
         "distinct_keys": 3475204,
-        "user_sum": 6829190
+        "total_cents": 8962888250
       },
-      "sql_ms": 304,
-      "peak_query_bytes": 59847810,
+      "sql_ms": 473,
+      "peak_query_bytes": 234375861,
       "written_rows": 1248934,
       "active_parts": 5
     },
@@ -357,20 +357,20 @@
       "case": "delete_insert",
       "phase": "partial_update",
       "repetition": 2,
-      "wall_seconds": 2.556,
+      "wall_seconds": 2.856,
       "correct": true,
       "actual": {
         "rows": 3475204,
         "distinct_keys": 3475204,
-        "user_sum": 6829190
+        "total_cents": 8962888250
       },
       "expected": {
         "rows": 3475204,
         "distinct_keys": 3475204,
-        "user_sum": 6829190
+        "total_cents": 8962888250
       },
-      "sql_ms": 303,
-      "peak_query_bytes": 59827058,
+      "sql_ms": 486,
+      "peak_query_bytes": 237262790,
       "written_rows": 1248934,
       "active_parts": 5
     },
@@ -378,20 +378,20 @@
       "case": "delete_insert",
       "phase": "partial_update",
       "repetition": 3,
-      "wall_seconds": 2.558,
+      "wall_seconds": 2.842,
       "correct": true,
       "actual": {
         "rows": 3475204,
         "distinct_keys": 3475204,
-        "user_sum": 6829190
+        "total_cents": 8962888250
       },
       "expected": {
         "rows": 3475204,
         "distinct_keys": 3475204,
-        "user_sum": 6829190
+        "total_cents": 8962888250
       },
-      "sql_ms": 308,
-      "peak_query_bytes": 59732870,
+      "sql_ms": 487,
+      "peak_query_bytes": 236357146,
       "written_rows": 1248934,
       "active_parts": 5
     },
@@ -399,20 +399,20 @@
       "case": "legacy",
       "phase": "initial",
       "repetition": 1,
-      "wall_seconds": 3.142,
+      "wall_seconds": 4.494,
       "correct": true,
       "actual": {
         "rows": 3475204,
         "distinct_keys": 3475204,
-        "user_sum": 6204723
+        "total_cents": 8900441550
       },
       "expected": {
         "rows": 3475204,
         "distinct_keys": 3475204,
-        "user_sum": 6204723
+        "total_cents": 8900441550
       },
-      "sql_ms": 851,
-      "peak_query_bytes": 340018780,
+      "sql_ms": 2101,
+      "peak_query_bytes": 704623510,
       "written_rows": 6950408,
       "active_parts": 4
     },
@@ -420,20 +420,20 @@
       "case": "legacy",
       "phase": "initial",
       "repetition": 2,
-      "wall_seconds": 3.255,
+      "wall_seconds": 4.426,
       "correct": true,
       "actual": {
         "rows": 3475204,
         "distinct_keys": 3475204,
-        "user_sum": 6204723
+        "total_cents": 8900441550
       },
       "expected": {
         "rows": 3475204,
         "distinct_keys": 3475204,
-        "user_sum": 6204723
+        "total_cents": 8900441550
       },
-      "sql_ms": 933,
-      "peak_query_bytes": 337969932,
+      "sql_ms": 2023,
+      "peak_query_bytes": 700770958,
       "written_rows": 6950408,
       "active_parts": 4
     },
@@ -441,20 +441,20 @@
       "case": "legacy",
       "phase": "initial",
       "repetition": 3,
-      "wall_seconds": 3.333,
+      "wall_seconds": 4.544,
       "correct": true,
       "actual": {
         "rows": 3475204,
         "distinct_keys": 3475204,
-        "user_sum": 6204723
+        "total_cents": 8900441550
       },
       "expected": {
         "rows": 3475204,
         "distinct_keys": 3475204,
-        "user_sum": 6204723
+        "total_cents": 8900441550
       },
-      "sql_ms": 854,
-      "peak_query_bytes": 341696123,
+      "sql_ms": 2156,
+      "peak_query_bytes": 706352217,
       "written_rows": 6950408,
       "active_parts": 4
     },
@@ -462,20 +462,20 @@
       "case": "legacy",
       "phase": "replay",
       "repetition": 1,
-      "wall_seconds": 3.293,
+      "wall_seconds": 4.561,
       "correct": true,
       "actual": {
         "rows": 3475204,
         "distinct_keys": 3475204,
-        "user_sum": 6204723
+        "total_cents": 8900441550
       },
       "expected": {
         "rows": 3475204,
         "distinct_keys": 3475204,
-        "user_sum": 6204723
+        "total_cents": 8900441550
       },
-      "sql_ms": 1049,
-      "peak_query_bytes": 481611951,
+      "sql_ms": 2177,
+      "peak_query_bytes": 700007453,
       "written_rows": 6950408,
       "active_parts": 4
     },
@@ -483,20 +483,20 @@
       "case": "legacy",
       "phase": "replay",
       "repetition": 2,
-      "wall_seconds": 3.613,
+      "wall_seconds": 4.816,
       "correct": true,
       "actual": {
         "rows": 3475204,
         "distinct_keys": 3475204,
-        "user_sum": 6204723
+        "total_cents": 8900441550
       },
       "expected": {
         "rows": 3475204,
         "distinct_keys": 3475204,
-        "user_sum": 6204723
+        "total_cents": 8900441550
       },
-      "sql_ms": 1220,
-      "peak_query_bytes": 481611951,
+      "sql_ms": 2362,
+      "peak_query_bytes": 722852563,
       "written_rows": 6950408,
       "active_parts": 4
     },
@@ -504,20 +504,20 @@
       "case": "legacy",
       "phase": "replay",
       "repetition": 3,
-      "wall_seconds": 3.471,
+      "wall_seconds": 4.54,
       "correct": true,
       "actual": {
         "rows": 3475204,
         "distinct_keys": 3475204,
-        "user_sum": 6204723
+        "total_cents": 8900441550
       },
       "expected": {
         "rows": 3475204,
         "distinct_keys": 3475204,
-        "user_sum": 6204723
+        "total_cents": 8900441550
       },
-      "sql_ms": 1074,
-      "peak_query_bytes": 481611951,
+      "sql_ms": 2164,
+      "peak_query_bytes": 703292198,
       "written_rows": 6950408,
       "active_parts": 4
     },
@@ -525,20 +525,20 @@
       "case": "legacy",
       "phase": "partial_update",
       "repetition": 1,
-      "wall_seconds": 2.812,
+      "wall_seconds": 3.618,
       "correct": true,
       "actual": {
         "rows": 3475204,
         "distinct_keys": 3475204,
-        "user_sum": 6829190
+        "total_cents": 8962888250
       },
       "expected": {
         "rows": 3475204,
         "distinct_keys": 3475204,
-        "user_sum": 6829190
+        "total_cents": 8962888250
       },
-      "sql_ms": 491,
-      "peak_query_bytes": 219630067,
+      "sql_ms": 1231,
+      "peak_query_bytes": 684470940,
       "written_rows": 4099671,
       "active_parts": 4
     },
@@ -546,20 +546,20 @@
       "case": "legacy",
       "phase": "partial_update",
       "repetition": 2,
-      "wall_seconds": 2.66,
+      "wall_seconds": 3.753,
       "correct": true,
       "actual": {
         "rows": 3475204,
         "distinct_keys": 3475204,
-        "user_sum": 6829190
+        "total_cents": 8962888250
       },
       "expected": {
         "rows": 3475204,
         "distinct_keys": 3475204,
-        "user_sum": 6829190
+        "total_cents": 8962888250
       },
-      "sql_ms": 441,
-      "peak_query_bytes": 221803054,
+      "sql_ms": 1315,
+      "peak_query_bytes": 688674691,
       "written_rows": 4099671,
       "active_parts": 4
     },
@@ -567,20 +567,20 @@
       "case": "legacy",
       "phase": "partial_update",
       "repetition": 3,
-      "wall_seconds": 2.711,
+      "wall_seconds": 3.76,
       "correct": true,
       "actual": {
         "rows": 3475204,
         "distinct_keys": 3475204,
-        "user_sum": 6829190
+        "total_cents": 8962888250
       },
       "expected": {
         "rows": 3475204,
         "distinct_keys": 3475204,
-        "user_sum": 6829190
+        "total_cents": 8962888250
       },
-      "sql_ms": 439,
-      "peak_query_bytes": 223815667,
+      "sql_ms": 1296,
+      "peak_query_bytes": 689984467,
       "written_rows": 4099671,
       "active_parts": 4
     },
@@ -588,20 +588,20 @@
       "case": "insert_overwrite",
       "phase": "initial",
       "repetition": 1,
-      "wall_seconds": 2.74,
+      "wall_seconds": 3.494,
       "correct": true,
       "actual": {
         "rows": 3475204,
         "distinct_keys": 3475204,
-        "user_sum": 6204723
+        "total_cents": 8900441550
       },
       "expected": {
         "rows": 3475204,
         "distinct_keys": 3475204,
-        "user_sum": 6204723
+        "total_cents": 8900441550
       },
-      "sql_ms": 388,
-      "peak_query_bytes": 160648641,
+      "sql_ms": 1008,
+      "peak_query_bytes": 700078269,
       "written_rows": 3475204,
       "active_parts": 4
     },
@@ -609,20 +609,20 @@
       "case": "insert_overwrite",
       "phase": "initial",
       "repetition": 2,
-      "wall_seconds": 2.689,
+      "wall_seconds": 3.346,
       "correct": true,
       "actual": {
         "rows": 3475204,
         "distinct_keys": 3475204,
-        "user_sum": 6204723
+        "total_cents": 8900441550
       },
       "expected": {
         "rows": 3475204,
         "distinct_keys": 3475204,
-        "user_sum": 6204723
+        "total_cents": 8900441550
       },
-      "sql_ms": 345,
-      "peak_query_bytes": 159883929,
+      "sql_ms": 985,
+      "peak_query_bytes": 681381546,
       "written_rows": 3475204,
       "active_parts": 4
     },
@@ -630,20 +630,20 @@
       "case": "insert_overwrite",
       "phase": "initial",
       "repetition": 3,
-      "wall_seconds": 2.547,
+      "wall_seconds": 3.371,
       "correct": true,
       "actual": {
         "rows": 3475204,
         "distinct_keys": 3475204,
-        "user_sum": 6204723
+        "total_cents": 8900441550
       },
       "expected": {
         "rows": 3475204,
         "distinct_keys": 3475204,
-        "user_sum": 6204723
+        "total_cents": 8900441550
       },
-      "sql_ms": 359,
-      "peak_query_bytes": 156197491,
+      "sql_ms": 1013,
+      "peak_query_bytes": 706335577,
       "written_rows": 3475204,
       "active_parts": 4
     },
@@ -651,20 +651,20 @@
       "case": "insert_overwrite",
       "phase": "replay",
       "repetition": 1,
-      "wall_seconds": 2.609,
+      "wall_seconds": 3.434,
       "correct": true,
       "actual": {
         "rows": 3475204,
         "distinct_keys": 3475204,
-        "user_sum": 6204723
+        "total_cents": 8900441550
       },
       "expected": {
         "rows": 3475204,
         "distinct_keys": 3475204,
-        "user_sum": 6204723
+        "total_cents": 8900441550
       },
-      "sql_ms": 370,
-      "peak_query_bytes": 159963496,
+      "sql_ms": 1048,
+      "peak_query_bytes": 681809779,
       "written_rows": 3475204,
       "active_parts": 4
     },
@@ -672,20 +672,20 @@
       "case": "insert_overwrite",
       "phase": "replay",
       "repetition": 2,
-      "wall_seconds": 2.638,
+      "wall_seconds": 3.379,
       "correct": true,
       "actual": {
         "rows": 3475204,
         "distinct_keys": 3475204,
-        "user_sum": 6204723
+        "total_cents": 8900441550
       },
       "expected": {
         "rows": 3475204,
         "distinct_keys": 3475204,
-        "user_sum": 6204723
+        "total_cents": 8900441550
       },
-      "sql_ms": 368,
-      "peak_query_bytes": 156115860,
+      "sql_ms": 1027,
+      "peak_query_bytes": 723091182,
       "written_rows": 3475204,
       "active_parts": 4
     },
@@ -693,20 +693,20 @@
       "case": "insert_overwrite",
       "phase": "replay",
       "repetition": 3,
-      "wall_seconds": 2.583,
+      "wall_seconds": 3.52,
       "correct": true,
       "actual": {
         "rows": 3475204,
         "distinct_keys": 3475204,
-        "user_sum": 6204723
+        "total_cents": 8900441550
       },
       "expected": {
         "rows": 3475204,
         "distinct_keys": 3475204,
-        "user_sum": 6204723
+        "total_cents": 8900441550
       },
-      "sql_ms": 368,
-      "peak_query_bytes": 160648513,
+      "sql_ms": 1164,
+      "peak_query_bytes": 682042465,
       "written_rows": 3475204,
       "active_parts": 4
     },
@@ -714,20 +714,20 @@
       "case": "insert_overwrite",
       "phase": "partial_update",
       "repetition": 1,
-      "wall_seconds": 2.361,
+      "wall_seconds": 2.644,
       "correct": false,
       "actual": {
         "rows": 624467,
         "distinct_keys": 624467,
-        "user_sum": 1739508
+        "total_cents": 1723543465
       },
       "expected": {
         "rows": 3475204,
         "distinct_keys": 3475204,
-        "user_sum": 6829190
+        "total_cents": 8962888250
       },
-      "sql_ms": 105,
-      "peak_query_bytes": 59388032,
+      "sql_ms": 222,
+      "peak_query_bytes": 234374701,
       "written_rows": 624467,
       "active_parts": 1
     },
@@ -735,20 +735,20 @@
       "case": "insert_overwrite",
       "phase": "partial_update",
       "repetition": 2,
-      "wall_seconds": 2.301,
+      "wall_seconds": 2.693,
       "correct": false,
       "actual": {
         "rows": 624467,
         "distinct_keys": 624467,
-        "user_sum": 1739508
+        "total_cents": 1723543465
       },
       "expected": {
         "rows": 3475204,
         "distinct_keys": 3475204,
-        "user_sum": 6829190
+        "total_cents": 8962888250
       },
-      "sql_ms": 101,
-      "peak_query_bytes": 59728126,
+      "sql_ms": 228,
+      "peak_query_bytes": 233142076,
       "written_rows": 624467,
       "active_parts": 1
     },
@@ -756,20 +756,20 @@
       "case": "insert_overwrite",
       "phase": "partial_update",
       "repetition": 3,
-      "wall_seconds": 2.299,
+      "wall_seconds": 2.641,
       "correct": false,
       "actual": {
         "rows": 624467,
         "distinct_keys": 624467,
-        "user_sum": 1739508
+        "total_cents": 1723543465
       },
       "expected": {
         "rows": 3475204,
         "distinct_keys": 3475204,
-        "user_sum": 6829190
+        "total_cents": 8962888250
       },
-      "sql_ms": 103,
-      "peak_query_bytes": 59818195,
+      "sql_ms": 227,
+      "peak_query_bytes": 233405484,
       "written_rows": 624467,
       "active_parts": 1
     }

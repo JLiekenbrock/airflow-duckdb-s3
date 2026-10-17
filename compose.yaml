@@ -23,7 +23,7 @@ services:
       CLICKHOUSE_USER: default
       CLICKHOUSE_PASSWORD: "${CLICKHOUSE_PASSWORD:-poc}"
       CLICKHOUSE_DATABASE: analytics
-      DELTA_S3_PATH: http://minio:9000/poc/delta/events/
+      DELTA_S3_PATH: http://minio:9000/poc/delta/nyc_taxi_trips/2025-01/
       AWS_ACCESS_KEY_ID: minio
       AWS_SECRET_ACCESS_KEY: minio123
       AWS_REGION: us-east-1

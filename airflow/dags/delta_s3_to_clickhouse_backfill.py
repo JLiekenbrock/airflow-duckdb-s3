@@ -12,15 +12,14 @@ with DAG(
     max_active_runs=1,
     max_active_tasks=1,
     params={
-        "start_date": "2026-10-12",
-        "end_date": "2026-10-19",
-        "tenant_ids": list(range(1, 801)),
+        "start_date": "2025-01-01",
+        "end_date": "2025-02-01",
         "days_per_batch": 7,
-        "delta_s3_path": None,
+        "delta_s3_path": "http://minio:9000/poc/delta/nyc_taxi_trips/2025-01/",
     },
     doc_md=(
         "Split a historical date range into windows, then trigger delta_s3_to_clickhouse for each one. "
-        "All selected tenants are passed to every window. The main DAG serializes loads and retries dbt tasks. "
+        "All taxi trips in each pickup-date window are included. The main DAG serializes loads and retries dbt tasks. "
         "Failed windows do not block other windows; this backfill run fails if any child run fails. "
         "Open each mapped task's Triggered DAG link to inspect its dbt models and tests. "
         "Unpause the main DAG first. Waiting is deferrable so it does not occupy the worker slot."
@@ -41,7 +40,6 @@ with DAG(
             {
                 "start_date": (start + timedelta(days=offset)).isoformat(),
                 "end_date": (start + timedelta(days=min(offset + days, (end - start).days))).isoformat(),
-                "tenant_ids": params["tenant_ids"],
                 "delta_s3_path": params["delta_s3_path"],
             }
             for offset in range(0, (end - start).days, days)

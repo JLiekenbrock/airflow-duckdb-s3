@@ -19,7 +19,7 @@ with DAG(
     max_active_runs=1,
     max_active_tasks=1,
     params={
-        "source": "http://minio:9000/poc/delta/nyc_taxi/2025-01/",
+        "source": "http://minio:9000/poc/delta/nyc_taxi_trips/2025-01/",
         "start_date": "2025-01-01",
         "end_date": "2025-02-01",
         "repeats": 3,

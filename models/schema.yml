@@ -1,25 +1,30 @@
 version: 2
 
 models:
-  - name: stg_delta_events
-    description: Incoming events validated before loading into the incremental table.
+  - name: stg_nyc_taxi_trips
+    description: Typed NYC yellow-taxi trips filtered by pickup date.
     columns:
-      - name: tenant_id
+      - name: source_month
         tests:
           - not_null
-      - name: event_id
+      - name: trip_id
         tests:
           - not_null
-      - name: event_date
+          - unique
+      - name: pickup_date
         tests:
           - not_null
-      - name: event_type
+      - name: pickup_at
         tests:
           - not_null
-          - accepted_values:
-              values: ['page_view', 'purchase']
-      - name: user_id
+      - name: source_row_number
         tests:
           - not_null
-  - name: delta_events
-    description: Events loaded from the selected date window in the Delta Lake table.
+      - name: total_amount
+        description: Nullable USD total. Negative amounts from source corrections are retained.
+  - name: nyc_taxi_trips
+    description: Incremental NYC trip fact table, partitioned monthly by NYC pickup date.
+    columns:
+      - name: trip_id
+        description: Surrogate from source month and original row position; assumes stable file ordering.
+        tests: [unique]
