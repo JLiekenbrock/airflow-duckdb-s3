@@ -37,7 +37,7 @@ dbt_profile = ProfileConfig(
 
 
 def set_dbt_vars(context, operator):
-    """Pass this mapped daily window to each Cosmos task."""
+    """Pass this mapped window to each Cosmos task."""
     windows = context["ti"].xcom_pull(task_ids="make_windows")
     operator.vars = windows[context["ti"].map_index]
 
@@ -64,7 +64,8 @@ with DAG(
     dag_id="delta_s3_to_clickhouse",
     doc_md=(
         "## Delta to ClickHouse\n\n"
-        "Airflow maps independent daily windows. Each window contains a Cosmos dbt lineage: "
+        "Airflow maps independent windows: days_per_batch=1 for daily loads, or 7 for weekly backfills. "
+        "Each window contains a Cosmos dbt lineage: "
         "staging model and input tests → final model and its uniqueness check → stage-view cleanup.\n\n"
         "Each dbt task retries twice. A failed window does not block other windows. One task runs at a time "
         "to limit ClickHouse load. The final success gate requires every window to succeed.\n\n"
@@ -81,6 +82,7 @@ with DAG(
         "start_date": "2026-10-12",
         "end_date": "2026-10-19",
         "tenant_ids": list(range(1, 801)),
+        "days_per_batch": 1,
     },
     tags=["dbt", "clickhouse", "delta-lake"],
 ) as dag:
@@ -131,6 +133,9 @@ with DAG(
     def validate_run_config():
         """Validate and normalize the single date/tenant selection for dbt."""
         params = get_current_context()["params"]
+        days_per_batch = params["days_per_batch"]
+        if type(days_per_batch) is not int or days_per_batch < 1:
+            raise ValueError("days_per_batch must be a positive integer")
         tenant_ids = params["tenant_ids"]
         if not isinstance(tenant_ids, list):
             raise ValueError("tenant_ids must be a list of integers")
@@ -152,27 +157,29 @@ with DAG(
             "start_date": start_date.isoformat(),
             "end_date": end_date.isoformat(),
             "tenant_ids": tenant_ids,
+            "days_per_batch": days_per_batch,
         }
 
     @task
     def make_windows(run_config):
         start = date.fromisoformat(run_config["start_date"])
         end = date.fromisoformat(run_config["end_date"])
+        days_per_batch = run_config["days_per_batch"]
         return [
             {
                 **run_config,
                 "start_date": (start + timedelta(days=offset)).isoformat(),
-                "end_date": (start + timedelta(days=offset + 1)).isoformat(),
-                "batch_id": (start + timedelta(days=offset)).strftime("day_%Y%m%d"),
+                "end_date": (start + timedelta(days=min(offset + days_per_batch, (end - start).days))).isoformat(),
+                "batch_id": (start + timedelta(days=offset)).strftime("window_%Y%m%d"),
             }
-            for offset in range((end - start).days)
+            for offset in range(0, (end - start).days, days_per_batch)
         ]
 
     @task(retries=1, trigger_rule="all_done")
     def drop_stage_view(window):
         database = os.environ["CLICKHOUSE_DATABASE"]
         batch_id = window["batch_id"]
-        if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", database) or not re.fullmatch(r"day_\d{8}", batch_id):
+        if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", database) or not re.fullmatch(r"window_\d{8}", batch_id):
             raise ValueError("Invalid database or batch identifier")
 
         query = f"DROP VIEW IF EXISTS `{database}`.`stg_delta_events_{batch_id}`"
