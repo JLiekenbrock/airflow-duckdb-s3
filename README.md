@@ -52,6 +52,16 @@ validate_run_config → flyway_migrate → dbt_lineage
 
 `nyc_taxi_trips.sql` uses `ref('stg_nyc_taxi_trips')`, which defines model order. Cosmos places tests after each model; failed input tests block the destination load. Each dbt task retries twice with exponential backoff. ClickHouse processes rows directly from Delta; Airflow does not collect trip rows in Python during an import. The staging model remains a normal ClickHouse view, recreated for each run.
 
+## Why keep dbt, and how small should loads be?
+
+Keep dbt for SQL models, dependencies, input checks and destination tests. Airflow orchestrates these steps and retries failed tasks; Flyway owns table migrations. Removing dbt would mean maintaining SQL assertions, dependency ordering and failure reporting ourselves.
+
+Use a daily window for regular loads and larger windows for backfills when memory and retry costs permit. These are operating recommendations, not an automatic schedule: the main DAG is manually triggered and its demo defaults cover January. Cosmos launches separate dbt processes for model and test tasks; avoid multiplying that startup cost with many tiny windows.
+
+A dbt process starts Python, loads dbt and its adapter, reads the project/profile/macros, and opens database connections before executing SQL. The batching benchmark deliberately uses a separate artifact directory per invocation to avoid concurrent file collisions; it cannot reuse a previous invocation's partial-parsing cache. We have not profiled the individual startup steps.
+
+Let ClickHouse process each bulk `INSERT … SELECT` internally in blocks. Millions of rows in one date window do not require separate 100k-row dbt invocations. Smaller application windows are useful when they bound memory or make retries cheaper. If exact small chunks are needed, a dedicated database-client loader can process them within a longer-lived task while dbt retains transformations and validation; that alternative is not implemented here.
+
 ## Actual taxi schema
 
 `analytics.nyc_taxi_trips` has 24 columns:
@@ -139,7 +149,23 @@ docker compose cp airflow:/opt/airflow/logs/batching_benchmark/results.md benchm
 docker compose cp airflow:/opt/airflow/logs/batching_benchmark/results.json benchmarks/batching_results.json
 ```
 
-Run this with the other benchmarks and imports idle: they share the staging view and server. Each query keeps `max_threads=4`, `max_insert_threads=1`; four concurrent queries can therefore consume more total resources. Date windows contain variable row counts. The benchmark does not split into exact 100k-row client batches, impose an insert-per-second rate, or compare async modes. Results are written only when you run it; no batching measurements are bundled yet.
+Run this with the other benchmarks and imports idle: they share the staging view and server. Each query keeps `max_threads=4`, `max_insert_threads=1`; four concurrent queries can therefore consume more total resources. Date windows contain variable row counts. The benchmark does not split into exact 100k-row client batches, impose an insert-per-second rate, or compare async modes.
+
+### Observed local results
+
+The report excerpt from the January run on 2026-10-17 showed the following medians for 3,475,204 trips (three trials each):
+
+| Window | Workers | Loads | Wall seconds | Summed SQL seconds | Correct trials |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Whole range | 1 | 1 | 3.177 | 0.975 | 3/3 |
+| Weekly | 1 | 5 | 11.752 | 1.145 | 3/3 |
+| Weekly | 2 | 5 | 7.111 | 1.194 | 3/3 |
+| Weekly | 4 | 5 | 4.805 | 1.340 | 3/3 |
+| Daily | 1 | 31 | 68.987 | 2.216 | 3/3 |
+
+The supplied excerpt omitted daily runs with two and four workers, so this is a partial comparison. In the shown results, one whole-range load was fastest. Daily sequential loads spent about 69 seconds overall versus 2.2 seconds in SQL: process startup and other work outside the measured SQL dominated. Parallel workers overlapped that overhead but the shown weekly scenarios still took longer than one large query. This measures end-to-end dbt operation batching, not pure ClickHouse insert throughput, and does not establish the best window for hundreds of millions of rows.
+
+View results in Airflow by selecting a run, then **report → Logs**. The complete generated files stay in `/opt/airflow/logs/batching_benchmark/`; copy them with the commands above to retain a particular run locally. Largest-query memory fell with smaller windows in this run, but that does not imply lower total memory with concurrent workers.
 
 For production, use a shared **Airflow pool** to queue ingestion tasks across DAGs, initially with one slot. A slot limits tasks, not internal worker queries or inserts per second: this benchmark deliberately controls its workers inside a single scenario task. ClickHouse memory/concurrency limits provide additional server protection; they do not replace Airflow's queue. Increase production concurrency only after measuring the server impact.
 
