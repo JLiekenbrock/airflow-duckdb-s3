@@ -1,10 +1,14 @@
 from datetime import date, datetime, timedelta
 import json
+import shutil
 import subprocess
+from pathlib import Path
 
 from airflow import DAG
-from airflow.decorators import task
+from airflow.decorators import task, task_group
 from airflow.operators.python import get_current_context
+from cosmos import DbtTaskGroup, ProfileConfig, ProjectConfig, RenderConfig
+from cosmos.constants import TestBehavior
 
 
 DEMO_ROWS = [
@@ -19,28 +23,28 @@ DEMO_ROWS = [
 ]
 
 DEFAULT_TENANT_BATCH_SIZE = 25
+DBT_PROJECT_PATH = Path("/opt/dbt")
+
+dbt_project = ProjectConfig(
+    dbt_project_path=DBT_PROJECT_PATH,
+    install_dbt_deps=False,
+)
+dbt_profile = ProfileConfig(
+    profile_name="delta_clickhouse",
+    target_name="dev",
+    profiles_yml_filepath=DBT_PROJECT_PATH / "profiles.yml",
+)
 
 
-def run_dbt(command, batch):
-    """Run one isolated dbt invocation for a tenant batch."""
-    vars_json = json.dumps(
-        {
-            "start_date": batch["start_date"],
-            "end_date": batch["end_date"],
-            "tenant_ids": batch["tenant_ids"],
-            "batch_id": batch["batch_id"],
-        }
-    )
-    subprocess.run(
-        [
-            "dbt", command, "--project-dir", "/opt/dbt", "--profiles-dir", "/opt/dbt",
-            "--select", "stg_delta_events" if command == "run" else "delta_events",
-            "--vars", vars_json,
-            "--target-path", f"/tmp/dbt-target-{batch['batch_id']}",
-        ],
-        cwd="/opt/dbt",
-        check=True,
-    )
+def set_batch_vars(context, operator):
+    """Pass the mapped tenant/date window into each Cosmos dbt task."""
+    batches = context["ti"].xcom_pull(task_ids="make_tenant_batches")
+    batch = batches[context["ti"].map_index]
+    operator.vars = batch
+    operator.dbt_cmd_global_flags = [
+        "--target-path",
+        f"/tmp/dbt-target-{batch['batch_id']}",
+    ]
 
 
 with DAG(
@@ -106,38 +110,44 @@ with DAG(
         return [
             {
                 "batch_id": f"batch_{index:03d}",
-                "tenant_ids": tenant_ids[offset : offset + TENANT_BATCH_SIZE],
+                "tenant_ids": tenant_ids[offset : offset + batch_size],
                 "start_date": params["start_date"],
                 "end_date": params["end_date"],
             }
             for index, offset in enumerate(range(0, len(tenant_ids), batch_size))
         ]
 
-    @task(retries=2)
-    def dbt_stage(batch):
-        run_dbt("run", batch)
-
-    @task(retries=2)
-    def dbt_build(batch):
-        run_dbt("build", batch)
-
     @task(retries=1)
     def drop_stage_view(batch):
         vars_json = json.dumps({"batch_id": batch["batch_id"]})
         subprocess.run(
             [
-                "dbt", "run-operation", "drop_batch_stage_view",
-                "--project-dir", "/opt/dbt", "--profiles-dir", "/opt/dbt",
-                "--vars", vars_json,
+                "dbt", "--project-dir", "/opt/dbt", "--profiles-dir", "/opt/dbt",
                 "--target-path", f"/tmp/dbt-target-{batch['batch_id']}",
+                "run-operation", "drop_batch_stage_view",
+                "--vars", vars_json,
             ],
             cwd="/opt/dbt",
             check=True,
         )
+        shutil.rmtree(f"/tmp/dbt-target-{batch['batch_id']}", ignore_errors=True)
+
+    @task_group(group_id="dbt_tenant_batch")
+    def dbt_tenant_batch(batch):
+        models = DbtTaskGroup(
+            group_id="models",
+            project_config=dbt_project,
+            profile_config=dbt_profile,
+            render_config=RenderConfig(test_behavior=TestBehavior.AFTER_EACH),
+            operator_args={
+                "interceptors": [set_batch_vars],
+                "retries": 2,
+            },
+        )
+        cleanup = drop_stage_view(batch)
+        models >> cleanup
 
     batches = make_tenant_batches()
-    stages = dbt_stage.expand(batch=batches)
-    builds = dbt_build.expand(batch=batches)
-    cleanup = drop_stage_view.expand(batch=batches)
+    dbt_batches = dbt_tenant_batch.expand(batch=batches)
 
-    seed >> migrate() >> stages >> builds >> cleanup
+    seed >> migrate() >> dbt_batches
