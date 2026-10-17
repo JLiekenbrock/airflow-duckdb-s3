@@ -6,6 +6,8 @@ services:
     depends_on:
       clickhouse:
         condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
     ports:
       - "8080:8080"
     environment:
@@ -19,15 +21,32 @@ services:
       CLICKHOUSE_USER: default
       CLICKHOUSE_PASSWORD: "${CLICKHOUSE_PASSWORD:-poc}"
       CLICKHOUSE_DATABASE: analytics
-      DELTA_S3_PATH: "${DELTA_S3_PATH:-s3://your-bucket/path/to/delta-table/}"
-      AWS_ACCESS_KEY_ID: "${AWS_ACCESS_KEY_ID:-}"
-      AWS_SECRET_ACCESS_KEY: "${AWS_SECRET_ACCESS_KEY:-}"
-      AWS_REGION: "${AWS_REGION:-eu-central-1}"
+      DELTA_S3_PATH: http://minio:9000/poc/delta/events/
+      AWS_ACCESS_KEY_ID: minio
+      AWS_SECRET_ACCESS_KEY: minio123
+      AWS_REGION: us-east-1
       _AIRFLOW_WWW_USER_USERNAME: admin
       _AIRFLOW_WWW_USER_PASSWORD: "${AIRFLOW_PASSWORD:-admin}"
-    volumes:
-      - airflow_state:/opt/airflow
     command: standalone
+
+  minio:
+    image: minio/minio:RELEASE.2025-02-07T23-21-09Z
+    command: server /data --console-address ":9001"
+    ports:
+      - "9002:9000"
+      - "9003:9001"
+    environment:
+      MINIO_ROOT_USER: minio
+      MINIO_ROOT_PASSWORD: minio123
+    volumes:
+      - minio_data:/data
+
+  minio-init:
+    image: minio/mc:RELEASE.2025-02-08T19-14-21Z
+    depends_on:
+      - minio
+    entrypoint: /bin/sh
+    command: -c 'until mc alias set local http://minio:9000 minio minio123; do sleep 1; done; mc mb --ignore-existing local/poc'
 
   clickhouse:
     image: clickhouse/clickhouse-server:26.3
@@ -35,7 +54,6 @@ services:
       - "8123:8123"
       - "9000:9000"
     environment:
-      CLICKHOUSE_DB: analytics
       CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: 1
       CLICKHOUSE_PASSWORD: "${CLICKHOUSE_PASSWORD:-poc}"
     healthcheck:
@@ -45,4 +63,4 @@ services:
       retries: 20
 
 volumes:
-  airflow_state:
+  minio_data:

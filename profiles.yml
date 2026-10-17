@@ -10,3 +10,5 @@ delta_clickhouse:
       schema: "{{ env_var('CLICKHOUSE_DATABASE', 'analytics') }}"
       secure: false
       threads: 1
+      custom_settings:
+        allow_experimental_lightweight_delete: 1
