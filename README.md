@@ -25,7 +25,15 @@ Set `days_per_batch` to a positive integer: `1` (default) for daily loads or `7`
 {"start_date": "2026-10-01", "end_date": "2026-10-18", "tenant_ids": [101, 202], "days_per_batch": 7}
 ```
 
-Airflow seeds 800 sample tenants by default and maps the selected date range into independent `process_window` groups. Each contains a Cosmos group rendering `+delta_events`: staging model/input tests → incremental model/destination uniqueness check → cleanup. A failed input test blocks only that window's load; other windows continue. Each dbt task retries twice with exponential backoff. Expand the mapped groups in Airflow to inspect individual windows and retry their failed tasks. One active DAG run and one active task limit ClickHouse concurrency. The date range is start-inclusive and end-exclusive.
+**Each batch is a date window containing all selected tenants together.** By default, `tenant_ids` contains all 800 sample tenants (IDs 1–800). Providing `[101, 202]` selects only those two tenants for every window. Airflow splits the dates according to `days_per_batch`; it does not split the tenant list.
+
+| Settings | Data processed in each window |
+| --- | --- |
+| Default tenants, `days_per_batch=1` | One day for all 800 tenants |
+| Default tenants, `days_per_batch=7` | Up to seven days for all 800 tenants |
+| `tenant_ids=[101, 202]`, `days_per_batch=7` | Up to seven days for tenants 101 and 202 together |
+
+Airflow creates an independent `process_window` group for each date window. Each contains a Cosmos group rendering `+delta_events`: staging model/input tests → incremental model/destination uniqueness check → cleanup. A failed input test blocks only that window's load; other windows continue. Each dbt task retries twice with exponential backoff. Expand the mapped groups in Airflow to inspect individual windows and retry their failed tasks. The date range is start-inclusive and end-exclusive.
 
 The DAG validates the run parameters, writes the Delta table at `http://minio:9000/poc/delta/events/` (MinIO console: <http://localhost:9003>; S3 API: <http://localhost:9002>), runs Flyway, then creates the windows. Each window has its own staging view. Cleanup runs even if a dbt task fails. The final `all_windows_succeeded` task depends on every processing task so cleanup cannot hide a failure: all windows are attempted, but the overall run remains failed if any task exhausts its retries. Validation, seeding, or migration failures block processing because all windows need those prerequisites.
 
@@ -44,13 +52,13 @@ Airflow owns the windows and retries; dbt uses the ordinary `delete+insert` incr
 
 ## Load concurrency
 
-Start with one load at a time. The DAG sets `max_active_runs=1` and `max_active_tasks=1`, preserving separate window tasks for visibility and retries while limiting concurrent work. ClickHouse can still execute a single load using multiple threads internally; Airflow's task limit and dbt's `threads: 1` do not restrict a ClickHouse query to one CPU thread. See [ClickHouse query parallelism](https://clickhouse.com/docs/concepts/core-concepts/query-parallelism).
+**One load at a time means one date-window load, including all selected tenants.** With the default 800 tenants and daily windows, each load handles that day's events for all 800 tenants together. The DAG sets `max_active_runs=1` and `max_active_tasks=1`, so Airflow executes only one task at a time across this DAG's windows. Separate window groups provide visibility and retries; they do not imply parallel execution. ClickHouse can still execute a single load using multiple threads internally; Airflow's task limit and dbt's `threads: 1` do not restrict a ClickHouse query to one CPU thread. See [ClickHouse query parallelism](https://clickhouse.com/docs/concepts/core-concepts/query-parallelism).
 
 Multiple concurrent loads can improve throughput when one load leaves spare capacity, such as while waiting on S3. They can also increase contention for CPU, memory, disk, and background merges. Benchmark one load first, then two, and increase concurrency only if total throughput improves while normal query latency and merge backlog remain acceptable. The DAG limits apply only to this DAG: use a shared Airflow pool across ingestion DAGs targeting the same ClickHouse instance. These limits constrain submitted tasks, so also account for queries that continue server-side after a client disconnect and for background merge work.
 
 ClickHouse supports concurrent inserts into the same monthly partition. Inserts create separate data parts that background merges consolidate; sharing a partition does not cause rows to overwrite each other. Daily or weekly insert windows therefore do not need to match monthly storage partitions. More concurrent inserts can increase resource usage and merge pressure. See [ClickHouse parts and merges](https://clickhouse.com/resources/engineering/clickhouse-optimize-table-final).
 
-Overlapping business keys are a separate concern: concurrent dbt `delete+insert` loads affecting the same `(tenant_id, event_id)` can interfere and produce incorrect results. Different date windows do not guarantee disjoint keys because `event_date` is not part of this model's unique key. The ordinary `MergeTree` table does not enforce business-key uniqueness or remove duplicates during background merges. Keep one load at a time initially; before enabling parallel writes, ensure their keys do not overlap and benchmark the resulting load.
+If you later enable concurrent window loads, overlapping business keys become a separate concern: concurrent dbt `delete+insert` loads affecting the same `(tenant_id, event_id)` can interfere and produce incorrect results. Different date windows do not guarantee disjoint keys because `event_date` is not part of this model's unique key. The ordinary `MergeTree` table does not enforce business-key uniqueness or remove duplicates during background merges. Before enabling parallel writes, ensure their keys do not overlap and benchmark the resulting load.
 
 To inspect the loaded result, connect to ClickHouse at `localhost:8123` and query `analytics.delta_events`.
 
