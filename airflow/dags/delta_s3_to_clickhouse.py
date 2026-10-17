@@ -1,14 +1,16 @@
+import base64
 from datetime import date, datetime, timedelta
-import json
-import shutil
+import os
+import re
 import subprocess
+import urllib.request
 from pathlib import Path
 
 from airflow import DAG
 from airflow.decorators import task, task_group
 from airflow.operators.empty import EmptyOperator
 from airflow.operators.python import get_current_context
-from cosmos import DbtTaskGroup, ProfileConfig, ProjectConfig, RenderConfig
+from cosmos import DbtTaskGroup, ExecutionConfig, ProfileConfig, ProjectConfig, RenderConfig
 from cosmos.constants import TestBehavior
 
 
@@ -25,6 +27,7 @@ DEMO_ROWS = [
 
 DEFAULT_TENANT_BATCH_SIZE = 25
 DBT_PROJECT_PATH = Path("/opt/dbt")
+DBT_EXECUTABLE = "/home/airflow/dbt-venv/bin/dbt"
 
 dbt_project = ProjectConfig(
     dbt_project_path=DBT_PROJECT_PATH,
@@ -42,10 +45,6 @@ def set_batch_vars(context, operator):
     batches = context["ti"].xcom_pull(task_ids="make_tenant_batches")
     batch = batches[context["ti"].map_index]
     operator.vars = batch
-    operator.dbt_cmd_global_flags = [
-        "--target-path",
-        f"/tmp/dbt-target-{batch['batch_id']}",
-    ]
 
 
 def cosmos_models(group_id, model):
@@ -53,6 +52,7 @@ def cosmos_models(group_id, model):
         group_id=group_id,
         project_config=dbt_project,
         profile_config=dbt_profile,
+        execution_config=ExecutionConfig(dbt_executable_path=DBT_EXECUTABLE),
         render_config=RenderConfig(
             select=[model],
             test_behavior=TestBehavior.AFTER_EACH,
@@ -96,6 +96,7 @@ with DAG(
                 "AWS_REGION": "us-east-1",
                 "AWS_ALLOW_HTTP": "true",
                 "AWS_S3_ADDRESSING_STYLE": "path",
+                "AWS_S3_ALLOW_UNSAFE_RENAME": "true",
             },
         )
 
@@ -103,9 +104,21 @@ with DAG(
 
     @task
     def migrate():
+        flyway_env = os.environ.copy()
+        flyway_env.update(
+            {
+                "environments_default_url": (
+                    f"jdbc:clickhouse://{flyway_env.get('CLICKHOUSE_HOST', 'localhost')}"
+                    f":{flyway_env.get('CLICKHOUSE_PORT', '8123')}/default"
+                ),
+                "environments_default_user": flyway_env.get("CLICKHOUSE_USER", "default"),
+                "environments_default_password": flyway_env.get("CLICKHOUSE_PASSWORD", ""),
+            }
+        )
         subprocess.run(
-            ["flyway", "-configFiles=/opt/dbt/flyway.toml", "migrate"],
+            ["flyway", "migrate"],
             cwd="/opt/dbt",
+            env=flyway_env,
             check=True,
         )
 
@@ -136,18 +149,23 @@ with DAG(
 
     @task(retries=1)
     def drop_stage_view(batch):
-        vars_json = json.dumps({"batch_id": batch["batch_id"]})
-        subprocess.run(
-            [
-                "dbt", "--project-dir", "/opt/dbt", "--profiles-dir", "/opt/dbt",
-                "--target-path", f"/tmp/dbt-target-{batch['batch_id']}",
-                "run-operation", "drop_batch_stage_view",
-                "--vars", vars_json,
-            ],
-            cwd="/opt/dbt",
-            check=True,
+        batch_id = batch["batch_id"]
+        database = os.environ["CLICKHOUSE_DATABASE"]
+        if not re.fullmatch(r"batch_\d{3}", batch_id) or not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", database):
+            raise ValueError("Invalid batch or database identifier")
+
+        query = f"DROP VIEW IF EXISTS `{database}`.`stg_delta_events_{batch_id}`"
+        credentials = base64.b64encode(
+            f"{os.environ['CLICKHOUSE_USER']}:{os.environ['CLICKHOUSE_PASSWORD']}".encode()
+        ).decode()
+        request = urllib.request.Request(
+            f"http://{os.environ['CLICKHOUSE_HOST']}:{os.environ['CLICKHOUSE_PORT']}/",
+            data=query.encode(),
+            headers={"Authorization": f"Basic {credentials}"},
+            method="POST",
         )
-        shutil.rmtree(f"/tmp/dbt-target-{batch['batch_id']}", ignore_errors=True)
+        with urllib.request.urlopen(request, timeout=30) as response:
+            response.read()
 
     @task_group(group_id="dbt_stage_batch")
     def dbt_stage_batch(batch):

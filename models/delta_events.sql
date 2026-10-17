@@ -10,9 +10,9 @@
 }}
 
 select
-    tenant_id,
-    event_id,
-    event_date,
+    assumeNotNull(tenant_id) as tenant_id,
+    assumeNotNull(event_id) as event_id,
+    assumeNotNull(event_date) as event_date,
     event_type,
     user_id
 from {{ ref('stg_delta_events') }}

@@ -1,5 +1,3 @@
-dbt-core==1.9.4
-dbt-clickhouse==1.9.3
 astronomer-cosmos==1.14.1
-deltalake==0.25.5
-pyarrow==19.0.1
+deltalake==0.22.3
+pyarrow==18.1.0

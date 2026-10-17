@@ -1,6 +1,10 @@
+[environments.default]
+url = "jdbc:clickhouse://localhost:8123/default"
+user = "default"
+password = ""
+schemas = ["default"]
+defaultSchema = "default"
+
 [flyway]
-locations = ["filesystem:migrations"]
-url = "jdbc:clickhouse://${CLICKHOUSE_HOST:-localhost}:${CLICKHOUSE_NATIVE_PORT:-9000}/default"
-user = "${CLICKHOUSE_USER:-default}"
-password = "${CLICKHOUSE_PASSWORD:-}"
-driver = "com.clickhouse.jdbc.ClickHouseDriver"
+environment = "default"
+locations = ["filesystem:/opt/dbt/migrations"]
