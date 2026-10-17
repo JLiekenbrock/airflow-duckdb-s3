@@ -25,4 +25,5 @@ COPY dbt_project.yml profiles.yml flyway.toml /opt/dbt/
 COPY migrations /opt/dbt/migrations
 COPY models /opt/dbt/models
 COPY tests /opt/dbt/tests
+COPY scripts /opt/dbt/scripts
 COPY airflow/dags /opt/airflow/dags

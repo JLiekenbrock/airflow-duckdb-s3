@@ -1,4 +1,4 @@
-from datetime import date, datetime, timedelta
+from datetime import date, datetime
 import os
 import subprocess
 from pathlib import Path
@@ -7,17 +7,6 @@ from airflow.sdk import DAG, get_current_context, task
 from cosmos import DbtTaskGroup, ExecutionConfig, ProfileConfig, ProjectConfig, RenderConfig
 from cosmos.constants import TestBehavior
 
-
-DEMO_ROWS = [
-    {
-        "tenant_id": tenant_id,
-        "event_id": 1,
-        "event_date": date(2026, 10, 12) + timedelta(days=tenant_id % 7),
-        "event_type": "purchase" if tenant_id % 2 else "page_view",
-        "user_id": tenant_id,
-    }
-    for tenant_id in range(1, 801)
-]
 
 DBT_PROJECT_PATH = Path("/opt/dbt")
 DBT_EXECUTABLE = "/home/airflow/dbt-venv/bin/dbt"
@@ -42,6 +31,7 @@ with DAG(
     dag_id="delta_s3_to_clickhouse",
     doc_md=(
         "## Delta to ClickHouse\n\n"
+        "Import existing Delta data from S3; this DAG never writes to the source. "
         "One run loads one date range for all selected tenants. Cosmos renders the dbt ref() dependencies: "
         "staging model and input tests → final model and its uniqueness check.\n\n"
         "Each dbt task retries twice. One run and one task execute at a time to limit ClickHouse load. "
@@ -62,29 +52,6 @@ with DAG(
     },
     tags=["dbt", "clickhouse", "delta-lake"],
 ) as dag:
-    @task
-    def seed_local_delta():
-        """Write a tiny repeatable Delta dataset to the local MinIO bucket."""
-        import pyarrow as pa
-        from deltalake import write_deltalake
-
-        endpoint = "http://minio:9000"
-        write_deltalake(
-            "s3://poc/delta/events",
-            pa.Table.from_pylist(DEMO_ROWS),
-            mode="overwrite",
-            partition_by=["event_date"],
-            storage_options={
-                "AWS_ENDPOINT_URL": endpoint,
-                "AWS_ACCESS_KEY_ID": "minio",
-                "AWS_SECRET_ACCESS_KEY": "minio123",
-                "AWS_REGION": "us-east-1",
-                "AWS_ALLOW_HTTP": "true",
-                "AWS_S3_ADDRESSING_STYLE": "path",
-                "AWS_S3_ALLOW_UNSAFE_RENAME": "true",
-            },
-        )
-
     @task
     def flyway_migrate():
         flyway_env = os.environ.copy()
@@ -133,7 +100,6 @@ with DAG(
         }
 
     run_config = validate_run_config()
-    seed = seed_local_delta()
     migrate = flyway_migrate()
     models = DbtTaskGroup(
         group_id="dbt_lineage",
@@ -151,4 +117,4 @@ with DAG(
         },
     )
 
-    run_config >> seed >> migrate >> models
+    run_config >> migrate >> models

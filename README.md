@@ -1,6 +1,6 @@
 # S3 Delta Lake to ClickHouse with dbt
 
-Small proof of concept based on the original Airflow + DuckDB S3 project. Airflow writes sample events to a local MinIO bucket as a Delta Lake table, then uses Flyway and Cosmos-rendered dbt tasks to validate and load a selected date window into ClickHouse.
+Small proof of concept based on the original Airflow + DuckDB S3 project. Airflow uses Flyway and Cosmos-rendered dbt tasks to validate and import existing Delta data from S3/MinIO into ClickHouse. A separate manual script supplies optional local demo data.
 
 ## How the tools work together
 
@@ -39,6 +39,14 @@ docker compose up -d --build
 
 Open Airflow 3 at <http://localhost:8083>. Sign in as `admin`; Airflow 3 generates its password on first startup. Retrieve it with `docker compose exec airflow cat /opt/airflow/simple_auth_manager_passwords.json.generated`. The local setup uses Airflow 3's `LocalExecutor` with SQLite and a single task slot.
 
+For a fresh local demo, run the standalone writer once before triggering a load:
+
+```sh
+docker compose exec -T airflow /usr/local/bin/python /opt/dbt/scripts/seed_local_delta.py
+```
+
+This manually creates or overwrites the demo Delta table at `s3://poc/delta/events`, partitioned by `event_date`, with one event for each of 800 tenants during October 12–18, 2026. It uses the container's Python environment only; it is not an Airflow task. Skip it when importing your own existing Delta table. Both DAGs only read the S3 source, including on retries and backfills. MinIO console: <http://localhost:9003>; S3 API: <http://localhost:9002>.
+
 ## Regular loads
 
 Trigger `delta_s3_to_clickhouse`. One run loads the entire requested date range for all selected tenants, without splitting it into batches:
@@ -52,12 +60,10 @@ The default tenant selection is all 800 sample tenants (IDs 1–800). The exampl
 The main DAG in `airflow/dags/delta_s3_to_clickhouse.py` is:
 
 ```text
-validate_run_config → seed_local_delta → flyway_migrate → dbt_lineage
+validate_run_config → flyway_migrate → dbt_lineage
 ```
 
 Cosmos reads dbt's `ref()` dependencies and renders staging model → input tests → final model → destination uniqueness test. Input failures block the load. Each dbt task retries twice with exponential backoff. Staging remains a normal dbt view (`analytics.stg_delta_events`), recreated for each run; there is no custom cleanup or success gate.
-
-The seed task writes a tiny demo Delta table at `http://minio:9000/poc/delta/events/` with one event per sample tenant during October 12–18, 2026. It overwrites that demo source on each run. Production ingestion should read your existing Delta source instead of using this seed task. MinIO console: <http://localhost:9003>; S3 API: <http://localhost:9002>.
 
 ## Backfills
 
@@ -84,7 +90,7 @@ Unpause the main DAG before starting a backfill. Waiting tasks use Airflow's tri
 There are two partition controls in this POC:
 
 - **Which data gets processed:** set `start_date`, `end_date`, and `tenant_ids` in the Airflow DAG run configuration. The staging model filters by the half-open date range and the tenant list before the final model runs.
-- **How data is stored:** the seed task writes the Delta table partitioned by `event_date`; the ClickHouse model stores data in monthly partitions using `toYYYYMM(event_date)`. Change `partition_by` in `airflow/dags/delta_s3_to_clickhouse.py` or `models/delta_events.sql` to use a different partition key/granularity. For daily ClickHouse partitions, for example, use `toYYYYMMDD(event_date)`.
+- **How data is stored:** the standalone seed script writes the demo Delta table partitioned by `event_date`; the ClickHouse destination uses monthly partitions with `toYYYYMM(event_date)`. Change the demo source partitioning in `scripts/seed_local_delta.py`. To change an existing ClickHouse table's partitioning, add a Flyway migration and keep the settings in `models/delta_events.sql` consistent.
 
 Column tests in `models/schema.yml` check required values and accepted event types; SQL tests in `tests/` check uniqueness of `(tenant_id, event_id)`. Flyway's JDBC driver and dbt connect over ClickHouse's HTTP port `8123`. Flyway creates the `analytics` database and defines `analytics.delta_events` in `migrations/V2__create_delta_events.sql`; dbt maintains its incremental contents in `models/delta_events.sql`. The sample data and local MinIO credentials are for local development only.
 
