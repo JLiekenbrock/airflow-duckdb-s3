@@ -49,6 +49,7 @@ with DAG(
         "start_date": "2026-10-12",
         "end_date": "2026-10-19",
         "tenant_ids": list(range(1, 801)),
+        "delta_s3_path": None,
     },
     tags=["dbt", "clickhouse", "delta-lake"],
 ) as dag:
@@ -93,10 +94,16 @@ with DAG(
             raise ValueError("tenant_ids must be non-negative integers")
         if start_date >= end_date:
             raise ValueError("end_date must be later than start_date")
+        source_path = params["delta_s3_path"]
+        if source_path is not None and (
+            not isinstance(source_path, str) or not source_path.startswith(("http://", "https://", "s3://"))
+        ):
+            raise ValueError("delta_s3_path must be an HTTP(S) or S3 URL, or null for the default source")
         return {
             "start_date": start_date.isoformat(),
             "end_date": end_date.isoformat(),
             "tenant_ids": tenant_ids,
+            "delta_s3_path": source_path,
         }
 
     run_config = validate_run_config()

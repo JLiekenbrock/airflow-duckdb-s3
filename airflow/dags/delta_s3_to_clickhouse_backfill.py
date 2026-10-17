@@ -16,6 +16,7 @@ with DAG(
         "end_date": "2026-10-19",
         "tenant_ids": list(range(1, 801)),
         "days_per_batch": 7,
+        "delta_s3_path": None,
     },
     doc_md=(
         "Split a historical date range into windows, then trigger delta_s3_to_clickhouse for each one. "
@@ -41,6 +42,7 @@ with DAG(
                 "start_date": (start + timedelta(days=offset)).isoformat(),
                 "end_date": (start + timedelta(days=min(offset + days, (end - start).days))).isoformat(),
                 "tenant_ids": params["tenant_ids"],
+                "delta_s3_path": params["delta_s3_path"],
             }
             for offset in range(0, (end - start).days, days)
         ]

@@ -1,0 +1,777 @@
+{
+  "config": {
+    "source": "http://minio:9000/poc/delta/nyc_taxi/2025-01/",
+    "start_date": "2025-01-01",
+    "end_date": "2025-02-01",
+    "repeats": 3,
+    "partial_end": "2025-01-08",
+    "expected": {
+      "rows": 3475204,
+      "distinct_keys": 3475204,
+      "user_sum": 6204723,
+      "partial_rows": 624467
+    },
+    "clickhouse_version": {
+      "version()": "26.3.53.4"
+    },
+    "dbt_version": "Core:\n  - installed: 1.9.4 \n  - latest:    1.12.6 - Update available!\n\n  Your version of dbt-core is out of date!\n  You can find instructions for upgrading here:\n  https://docs.getdbt.com/docs/installation\n\nPlugins:\n  - clickhouse: 1.9.3 - Update available!\n\n  At least one plugin is out of date with dbt-core.\n  You can find instructions for upgrading here:\n  https://docs.getdbt.com/docs/installation\n\n\n"
+  },
+  "results": [
+    {
+      "case": "append",
+      "phase": "initial",
+      "repetition": 1,
+      "wall_seconds": 2.587,
+      "correct": true,
+      "actual": {
+        "rows": 3475204,
+        "distinct_keys": 3475204,
+        "user_sum": 6204723
+      },
+      "expected": {
+        "rows": 3475204,
+        "distinct_keys": 3475204,
+        "user_sum": 6204723
+      },
+      "sql_ms": 383,
+      "peak_query_bytes": 160781896,
+      "written_rows": 3475204,
+      "active_parts": 4
+    },
+    {
+      "case": "append",
+      "phase": "initial",
+      "repetition": 2,
+      "wall_seconds": 2.5,
+      "correct": true,
+      "actual": {
+        "rows": 3475204,
+        "distinct_keys": 3475204,
+        "user_sum": 6204723
+      },
+      "expected": {
+        "rows": 3475204,
+        "distinct_keys": 3475204,
+        "user_sum": 6204723
+      },
+      "sql_ms": 340,
+      "peak_query_bytes": 159911390,
+      "written_rows": 3475204,
+      "active_parts": 4
+    },
+    {
+      "case": "append",
+      "phase": "initial",
+      "repetition": 3,
+      "wall_seconds": 2.524,
+      "correct": true,
+      "actual": {
+        "rows": 3475204,
+        "distinct_keys": 3475204,
+        "user_sum": 6204723
+      },
+      "expected": {
+        "rows": 3475204,
+        "distinct_keys": 3475204,
+        "user_sum": 6204723
+      },
+      "sql_ms": 347,
+      "peak_query_bytes": 156473564,
+      "written_rows": 3475204,
+      "active_parts": 4
+    },
+    {
+      "case": "append",
+      "phase": "replay",
+      "repetition": 1,
+      "wall_seconds": 2.562,
+      "correct": false,
+      "actual": {
+        "rows": 6950408,
+        "distinct_keys": 3475204,
+        "user_sum": 12409446
+      },
+      "expected": {
+        "rows": 3475204,
+        "distinct_keys": 3475204,
+        "user_sum": 6204723
+      },
+      "sql_ms": 349,
+      "peak_query_bytes": 160951326,
+      "written_rows": 3475204,
+      "active_parts": 3
+    },
+    {
+      "case": "append",
+      "phase": "replay",
+      "repetition": 2,
+      "wall_seconds": 2.577,
+      "correct": false,
+      "actual": {
+        "rows": 6950408,
+        "distinct_keys": 3475204,
+        "user_sum": 12409446
+      },
+      "expected": {
+        "rows": 3475204,
+        "distinct_keys": 3475204,
+        "user_sum": 6204723
+      },
+      "sql_ms": 356,
+      "peak_query_bytes": 154797181,
+      "written_rows": 3475204,
+      "active_parts": 3
+    },
+    {
+      "case": "append",
+      "phase": "replay",
+      "repetition": 3,
+      "wall_seconds": 2.562,
+      "correct": false,
+      "actual": {
+        "rows": 6950408,
+        "distinct_keys": 3475204,
+        "user_sum": 12409446
+      },
+      "expected": {
+        "rows": 3475204,
+        "distinct_keys": 3475204,
+        "user_sum": 6204723
+      },
+      "sql_ms": 355,
+      "peak_query_bytes": 160993012,
+      "written_rows": 3475204,
+      "active_parts": 3
+    },
+    {
+      "case": "append",
+      "phase": "partial_update",
+      "repetition": 1,
+      "wall_seconds": 2.265,
+      "correct": false,
+      "actual": {
+        "rows": 4099671,
+        "distinct_keys": 3475204,
+        "user_sum": 7944231
+      },
+      "expected": {
+        "rows": 3475204,
+        "distinct_keys": 3475204,
+        "user_sum": 6829190
+      },
+      "sql_ms": 84,
+      "peak_query_bytes": 59808379,
+      "written_rows": 624467,
+      "active_parts": 5
+    },
+    {
+      "case": "append",
+      "phase": "partial_update",
+      "repetition": 2,
+      "wall_seconds": 2.271,
+      "correct": false,
+      "actual": {
+        "rows": 4099671,
+        "distinct_keys": 3475204,
+        "user_sum": 7944231
+      },
+      "expected": {
+        "rows": 3475204,
+        "distinct_keys": 3475204,
+        "user_sum": 6829190
+      },
+      "sql_ms": 83,
+      "peak_query_bytes": 59723094,
+      "written_rows": 624467,
+      "active_parts": 5
+    },
+    {
+      "case": "append",
+      "phase": "partial_update",
+      "repetition": 3,
+      "wall_seconds": 2.274,
+      "correct": false,
+      "actual": {
+        "rows": 4099671,
+        "distinct_keys": 3475204,
+        "user_sum": 7944231
+      },
+      "expected": {
+        "rows": 3475204,
+        "distinct_keys": 3475204,
+        "user_sum": 6829190
+      },
+      "sql_ms": 94,
+      "peak_query_bytes": 59726414,
+      "written_rows": 624467,
+      "active_parts": 5
+    },
+    {
+      "case": "delete_insert",
+      "phase": "initial",
+      "repetition": 1,
+      "wall_seconds": 2.928,
+      "correct": true,
+      "actual": {
+        "rows": 3475204,
+        "distinct_keys": 3475204,
+        "user_sum": 6204723
+      },
+      "expected": {
+        "rows": 3475204,
+        "distinct_keys": 3475204,
+        "user_sum": 6204723
+      },
+      "sql_ms": 639,
+      "peak_query_bytes": 159935661,
+      "written_rows": 6950408,
+      "active_parts": 4
+    },
+    {
+      "case": "delete_insert",
+      "phase": "initial",
+      "repetition": 2,
+      "wall_seconds": 2.807,
+      "correct": true,
+      "actual": {
+        "rows": 3475204,
+        "distinct_keys": 3475204,
+        "user_sum": 6204723
+      },
+      "expected": {
+        "rows": 3475204,
+        "distinct_keys": 3475204,
+        "user_sum": 6204723
+      },
+      "sql_ms": 624,
+      "peak_query_bytes": 154816325,
+      "written_rows": 6950408,
+      "active_parts": 4
+    },
+    {
+      "case": "delete_insert",
+      "phase": "initial",
+      "repetition": 3,
+      "wall_seconds": 2.914,
+      "correct": true,
+      "actual": {
+        "rows": 3475204,
+        "distinct_keys": 3475204,
+        "user_sum": 6204723
+      },
+      "expected": {
+        "rows": 3475204,
+        "distinct_keys": 3475204,
+        "user_sum": 6204723
+      },
+      "sql_ms": 617,
+      "peak_query_bytes": 150443297,
+      "written_rows": 6950408,
+      "active_parts": 4
+    },
+    {
+      "case": "delete_insert",
+      "phase": "replay",
+      "repetition": 1,
+      "wall_seconds": 3.42,
+      "correct": true,
+      "actual": {
+        "rows": 3475204,
+        "distinct_keys": 3475204,
+        "user_sum": 6204723
+      },
+      "expected": {
+        "rows": 3475204,
+        "distinct_keys": 3475204,
+        "user_sum": 6204723
+      },
+      "sql_ms": 1175,
+      "peak_query_bytes": 156113476,
+      "written_rows": 6950408,
+      "active_parts": 3
+    },
+    {
+      "case": "delete_insert",
+      "phase": "replay",
+      "repetition": 2,
+      "wall_seconds": 3.452,
+      "correct": true,
+      "actual": {
+        "rows": 3475204,
+        "distinct_keys": 3475204,
+        "user_sum": 6204723
+      },
+      "expected": {
+        "rows": 3475204,
+        "distinct_keys": 3475204,
+        "user_sum": 6204723
+      },
+      "sql_ms": 1185,
+      "peak_query_bytes": 149612271,
+      "written_rows": 6950408,
+      "active_parts": 3
+    },
+    {
+      "case": "delete_insert",
+      "phase": "replay",
+      "repetition": 3,
+      "wall_seconds": 3.358,
+      "correct": true,
+      "actual": {
+        "rows": 3475204,
+        "distinct_keys": 3475204,
+        "user_sum": 6204723
+      },
+      "expected": {
+        "rows": 3475204,
+        "distinct_keys": 3475204,
+        "user_sum": 6204723
+      },
+      "sql_ms": 1161,
+      "peak_query_bytes": 160839735,
+      "written_rows": 6950408,
+      "active_parts": 3
+    },
+    {
+      "case": "delete_insert",
+      "phase": "partial_update",
+      "repetition": 1,
+      "wall_seconds": 2.601,
+      "correct": true,
+      "actual": {
+        "rows": 3475204,
+        "distinct_keys": 3475204,
+        "user_sum": 6829190
+      },
+      "expected": {
+        "rows": 3475204,
+        "distinct_keys": 3475204,
+        "user_sum": 6829190
+      },
+      "sql_ms": 304,
+      "peak_query_bytes": 59847810,
+      "written_rows": 1248934,
+      "active_parts": 5
+    },
+    {
+      "case": "delete_insert",
+      "phase": "partial_update",
+      "repetition": 2,
+      "wall_seconds": 2.556,
+      "correct": true,
+      "actual": {
+        "rows": 3475204,
+        "distinct_keys": 3475204,
+        "user_sum": 6829190
+      },
+      "expected": {
+        "rows": 3475204,
+        "distinct_keys": 3475204,
+        "user_sum": 6829190
+      },
+      "sql_ms": 303,
+      "peak_query_bytes": 59827058,
+      "written_rows": 1248934,
+      "active_parts": 5
+    },
+    {
+      "case": "delete_insert",
+      "phase": "partial_update",
+      "repetition": 3,
+      "wall_seconds": 2.558,
+      "correct": true,
+      "actual": {
+        "rows": 3475204,
+        "distinct_keys": 3475204,
+        "user_sum": 6829190
+      },
+      "expected": {
+        "rows": 3475204,
+        "distinct_keys": 3475204,
+        "user_sum": 6829190
+      },
+      "sql_ms": 308,
+      "peak_query_bytes": 59732870,
+      "written_rows": 1248934,
+      "active_parts": 5
+    },
+    {
+      "case": "legacy",
+      "phase": "initial",
+      "repetition": 1,
+      "wall_seconds": 3.142,
+      "correct": true,
+      "actual": {
+        "rows": 3475204,
+        "distinct_keys": 3475204,
+        "user_sum": 6204723
+      },
+      "expected": {
+        "rows": 3475204,
+        "distinct_keys": 3475204,
+        "user_sum": 6204723
+      },
+      "sql_ms": 851,
+      "peak_query_bytes": 340018780,
+      "written_rows": 6950408,
+      "active_parts": 4
+    },
+    {
+      "case": "legacy",
+      "phase": "initial",
+      "repetition": 2,
+      "wall_seconds": 3.255,
+      "correct": true,
+      "actual": {
+        "rows": 3475204,
+        "distinct_keys": 3475204,
+        "user_sum": 6204723
+      },
+      "expected": {
+        "rows": 3475204,
+        "distinct_keys": 3475204,
+        "user_sum": 6204723
+      },
+      "sql_ms": 933,
+      "peak_query_bytes": 337969932,
+      "written_rows": 6950408,
+      "active_parts": 4
+    },
+    {
+      "case": "legacy",
+      "phase": "initial",
+      "repetition": 3,
+      "wall_seconds": 3.333,
+      "correct": true,
+      "actual": {
+        "rows": 3475204,
+        "distinct_keys": 3475204,
+        "user_sum": 6204723
+      },
+      "expected": {
+        "rows": 3475204,
+        "distinct_keys": 3475204,
+        "user_sum": 6204723
+      },
+      "sql_ms": 854,
+      "peak_query_bytes": 341696123,
+      "written_rows": 6950408,
+      "active_parts": 4
+    },
+    {
+      "case": "legacy",
+      "phase": "replay",
+      "repetition": 1,
+      "wall_seconds": 3.293,
+      "correct": true,
+      "actual": {
+        "rows": 3475204,
+        "distinct_keys": 3475204,
+        "user_sum": 6204723
+      },
+      "expected": {
+        "rows": 3475204,
+        "distinct_keys": 3475204,
+        "user_sum": 6204723
+      },
+      "sql_ms": 1049,
+      "peak_query_bytes": 481611951,
+      "written_rows": 6950408,
+      "active_parts": 4
+    },
+    {
+      "case": "legacy",
+      "phase": "replay",
+      "repetition": 2,
+      "wall_seconds": 3.613,
+      "correct": true,
+      "actual": {
+        "rows": 3475204,
+        "distinct_keys": 3475204,
+        "user_sum": 6204723
+      },
+      "expected": {
+        "rows": 3475204,
+        "distinct_keys": 3475204,
+        "user_sum": 6204723
+      },
+      "sql_ms": 1220,
+      "peak_query_bytes": 481611951,
+      "written_rows": 6950408,
+      "active_parts": 4
+    },
+    {
+      "case": "legacy",
+      "phase": "replay",
+      "repetition": 3,
+      "wall_seconds": 3.471,
+      "correct": true,
+      "actual": {
+        "rows": 3475204,
+        "distinct_keys": 3475204,
+        "user_sum": 6204723
+      },
+      "expected": {
+        "rows": 3475204,
+        "distinct_keys": 3475204,
+        "user_sum": 6204723
+      },
+      "sql_ms": 1074,
+      "peak_query_bytes": 481611951,
+      "written_rows": 6950408,
+      "active_parts": 4
+    },
+    {
+      "case": "legacy",
+      "phase": "partial_update",
+      "repetition": 1,
+      "wall_seconds": 2.812,
+      "correct": true,
+      "actual": {
+        "rows": 3475204,
+        "distinct_keys": 3475204,
+        "user_sum": 6829190
+      },
+      "expected": {
+        "rows": 3475204,
+        "distinct_keys": 3475204,
+        "user_sum": 6829190
+      },
+      "sql_ms": 491,
+      "peak_query_bytes": 219630067,
+      "written_rows": 4099671,
+      "active_parts": 4
+    },
+    {
+      "case": "legacy",
+      "phase": "partial_update",
+      "repetition": 2,
+      "wall_seconds": 2.66,
+      "correct": true,
+      "actual": {
+        "rows": 3475204,
+        "distinct_keys": 3475204,
+        "user_sum": 6829190
+      },
+      "expected": {
+        "rows": 3475204,
+        "distinct_keys": 3475204,
+        "user_sum": 6829190
+      },
+      "sql_ms": 441,
+      "peak_query_bytes": 221803054,
+      "written_rows": 4099671,
+      "active_parts": 4
+    },
+    {
+      "case": "legacy",
+      "phase": "partial_update",
+      "repetition": 3,
+      "wall_seconds": 2.711,
+      "correct": true,
+      "actual": {
+        "rows": 3475204,
+        "distinct_keys": 3475204,
+        "user_sum": 6829190
+      },
+      "expected": {
+        "rows": 3475204,
+        "distinct_keys": 3475204,
+        "user_sum": 6829190
+      },
+      "sql_ms": 439,
+      "peak_query_bytes": 223815667,
+      "written_rows": 4099671,
+      "active_parts": 4
+    },
+    {
+      "case": "insert_overwrite",
+      "phase": "initial",
+      "repetition": 1,
+      "wall_seconds": 2.74,
+      "correct": true,
+      "actual": {
+        "rows": 3475204,
+        "distinct_keys": 3475204,
+        "user_sum": 6204723
+      },
+      "expected": {
+        "rows": 3475204,
+        "distinct_keys": 3475204,
+        "user_sum": 6204723
+      },
+      "sql_ms": 388,
+      "peak_query_bytes": 160648641,
+      "written_rows": 3475204,
+      "active_parts": 4
+    },
+    {
+      "case": "insert_overwrite",
+      "phase": "initial",
+      "repetition": 2,
+      "wall_seconds": 2.689,
+      "correct": true,
+      "actual": {
+        "rows": 3475204,
+        "distinct_keys": 3475204,
+        "user_sum": 6204723
+      },
+      "expected": {
+        "rows": 3475204,
+        "distinct_keys": 3475204,
+        "user_sum": 6204723
+      },
+      "sql_ms": 345,
+      "peak_query_bytes": 159883929,
+      "written_rows": 3475204,
+      "active_parts": 4
+    },
+    {
+      "case": "insert_overwrite",
+      "phase": "initial",
+      "repetition": 3,
+      "wall_seconds": 2.547,
+      "correct": true,
+      "actual": {
+        "rows": 3475204,
+        "distinct_keys": 3475204,
+        "user_sum": 6204723
+      },
+      "expected": {
+        "rows": 3475204,
+        "distinct_keys": 3475204,
+        "user_sum": 6204723
+      },
+      "sql_ms": 359,
+      "peak_query_bytes": 156197491,
+      "written_rows": 3475204,
+      "active_parts": 4
+    },
+    {
+      "case": "insert_overwrite",
+      "phase": "replay",
+      "repetition": 1,
+      "wall_seconds": 2.609,
+      "correct": true,
+      "actual": {
+        "rows": 3475204,
+        "distinct_keys": 3475204,
+        "user_sum": 6204723
+      },
+      "expected": {
+        "rows": 3475204,
+        "distinct_keys": 3475204,
+        "user_sum": 6204723
+      },
+      "sql_ms": 370,
+      "peak_query_bytes": 159963496,
+      "written_rows": 3475204,
+      "active_parts": 4
+    },
+    {
+      "case": "insert_overwrite",
+      "phase": "replay",
+      "repetition": 2,
+      "wall_seconds": 2.638,
+      "correct": true,
+      "actual": {
+        "rows": 3475204,
+        "distinct_keys": 3475204,
+        "user_sum": 6204723
+      },
+      "expected": {
+        "rows": 3475204,
+        "distinct_keys": 3475204,
+        "user_sum": 6204723
+      },
+      "sql_ms": 368,
+      "peak_query_bytes": 156115860,
+      "written_rows": 3475204,
+      "active_parts": 4
+    },
+    {
+      "case": "insert_overwrite",
+      "phase": "replay",
+      "repetition": 3,
+      "wall_seconds": 2.583,
+      "correct": true,
+      "actual": {
+        "rows": 3475204,
+        "distinct_keys": 3475204,
+        "user_sum": 6204723
+      },
+      "expected": {
+        "rows": 3475204,
+        "distinct_keys": 3475204,
+        "user_sum": 6204723
+      },
+      "sql_ms": 368,
+      "peak_query_bytes": 160648513,
+      "written_rows": 3475204,
+      "active_parts": 4
+    },
+    {
+      "case": "insert_overwrite",
+      "phase": "partial_update",
+      "repetition": 1,
+      "wall_seconds": 2.361,
+      "correct": false,
+      "actual": {
+        "rows": 624467,
+        "distinct_keys": 624467,
+        "user_sum": 1739508
+      },
+      "expected": {
+        "rows": 3475204,
+        "distinct_keys": 3475204,
+        "user_sum": 6829190
+      },
+      "sql_ms": 105,
+      "peak_query_bytes": 59388032,
+      "written_rows": 624467,
+      "active_parts": 1
+    },
+    {
+      "case": "insert_overwrite",
+      "phase": "partial_update",
+      "repetition": 2,
+      "wall_seconds": 2.301,
+      "correct": false,
+      "actual": {
+        "rows": 624467,
+        "distinct_keys": 624467,
+        "user_sum": 1739508
+      },
+      "expected": {
+        "rows": 3475204,
+        "distinct_keys": 3475204,
+        "user_sum": 6829190
+      },
+      "sql_ms": 101,
+      "peak_query_bytes": 59728126,
+      "written_rows": 624467,
+      "active_parts": 1
+    },
+    {
+      "case": "insert_overwrite",
+      "phase": "partial_update",
+      "repetition": 3,
+      "wall_seconds": 2.299,
+      "correct": false,
+      "actual": {
+        "rows": 624467,
+        "distinct_keys": 624467,
+        "user_sum": 1739508
+      },
+      "expected": {
+        "rows": 3475204,
+        "distinct_keys": 3475204,
+        "user_sum": 6829190
+      },
+      "sql_ms": 103,
+      "peak_query_bytes": 59818195,
+      "written_rows": 624467,
+      "active_parts": 1
+    }
+  ]
+}

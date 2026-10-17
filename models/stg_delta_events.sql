@@ -3,6 +3,7 @@
 {% set start_date = var('start_date', '1970-01-01') %}
 {% set end_date = var('end_date', '9999-12-31') %}
 {% set tenant_ids = var('tenant_ids', range(1, 801) | list) %}
+{% set delta_s3_path = var('delta_s3_path', none) or env_var('DELTA_S3_PATH') %}
 
 select
     toUInt64(tenant_id) as tenant_id,
@@ -11,7 +12,7 @@ select
     toLowCardinality(toString(event_type)) as event_type,
     toUInt64(user_id) as user_id
 from deltaLake(
-    '{{ env_var("DELTA_S3_PATH") }}',
+    '{{ delta_s3_path | replace("'", "''") }}',
     '{{ env_var("AWS_ACCESS_KEY_ID", "") }}',
     '{{ env_var("AWS_SECRET_ACCESS_KEY", "") }}'
 )

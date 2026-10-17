@@ -1,0 +1,5 @@
+name: insert_benchmark
+version: "1.0"
+config-version: 2
+profile: insert_benchmark
+model-paths: ["models"]

@@ -47,6 +47,60 @@ docker compose exec -T airflow /usr/local/bin/python /opt/dbt/scripts/seed_local
 
 This manually creates or overwrites the demo Delta table at `s3://poc/delta/events`, partitioned by `event_date`, with one event for each of 800 tenants during October 12–18, 2026. It uses the container's Python environment only; it is not an Airflow task. Skip it when importing your own existing Delta table. Both DAGs only read the S3 source, including on retries and backfills. MinIO console: <http://localhost:9003>; S3 API: <http://localhost:9002>.
 
+## Larger demo: NYC yellow taxis
+
+The standalone `scripts/seed_nyc_taxi.py` downloads a month from the [official NYC TLC trip records](https://www.nyc.gov/site/tlc/about/tlc-trip-record-data.page), projects trips into the existing POC event schema, and writes a separate date-partitioned Delta table in MinIO. It reads Parquet in 250,000-row chunks rather than building a Python list of millions of trips. January 2025 is about 59 MB compressed and contains 3,475,226 source trips.
+
+```sh
+docker compose exec -T airflow /usr/local/bin/python /opt/dbt/scripts/seed_nyc_taxi.py --month 2025-01
+```
+
+This creates or replaces only `s3://poc/delta/nyc_taxi/2025-01`; the small demo source is preserved. Source pickup zone IDs become `tenant_id`, pickup dates become `event_date`, vendor IDs become `user_id` (null vendors become 0), and `event_type` is the constant `purchase`. An artificial `event_id` combines source month and original row position. These are benchmark mappings, not actual customer or passenger identities. The writer excludes pickup dates outside the chosen month and zones outside 1–800 and reports the excluded count. This is a narrow event projection, not a complete taxi analytics schema; the source has no official trip ID, and row-position IDs assume unchanged source file ordering.
+
+Trigger the existing `delta_s3_to_clickhouse` DAG with:
+
+```json
+{"start_date": "2025-01-01", "end_date": "2025-02-01", "delta_s3_path": "http://minio:9000/poc/delta/nyc_taxi/2025-01/"}
+```
+
+Omitting `tenant_ids` processes all default tenant IDs (including every mapped pickup zone). The optional `delta_s3_path` overrides the default `DELTA_S3_PATH` for this run; it is also forwarded by the backfill DAG. To exercise weekly backfills on this dataset, pass the same configuration to `delta_s3_to_clickhouse_backfill` with `days_per_batch: 7`. The destination remains `analytics.delta_events`; taxi event IDs are separate from the small demo IDs. Prepare additional months with `--month YYYY-MM` and load their respective source paths. This one-month example demonstrates millions of projected rows, not a benchmark of hundreds of millions or the full taxi payload.
+
+Local run on October 17, 2026: 3,475,204 rows loaded, 22 source records excluded, 261 pickup zones, and no duplicate `(tenant_id, event_id)` keys. All Airflow tasks and dbt tests passed. Download/conversion took about 5 seconds and the import task sequence about 13 seconds, including about 2.8 seconds for the final dbt model task. These are observations from this local narrow projection, not throughput guarantees.
+
+```sql
+SELECT count() AS rows, uniqExact((tenant_id, event_id)) AS distinct_keys
+FROM analytics.delta_events
+WHERE toYYYYMM(event_date) = 202501;
+```
+
+## Insert strategy benchmark in Airflow
+
+After preparing the NYC taxi source, unpause and trigger `clickhouse_insert_benchmark`. It is defined in `airflow/dags/clickhouse_insert_benchmark.py` and runs a separate dbt project in `benchmarks/`. Each mapped strategy group shows `initial_load` → `replay` → `partial_update`, with three measured trials per phase by default. The final `report` task prints the comparison and writes Markdown and JSON results under `/opt/airflow/logs/insert_benchmark/`.
+
+Mapped indexes are `0=append`, `1=delete+insert`, `2=default`, and `3=insert_overwrite`. The normal import DAG continues using `delete+insert`; benchmark choices do not change its configuration.
+
+| Strategy | Question tested |
+| --- | --- |
+| `append` | How fast is loading new rows, and what happens on replay? |
+| `delete+insert` | Can an existing time window be replayed and corrected by unique key? |
+| `default` | What is the cost of rebuilding the table with old and new rows? |
+| `insert_overwrite` | Is replacing monthly partitions suitable for full-month loads and partial-week corrections? |
+
+The initial load inserts a full month into an empty table. Replay repeats that month over an existing baseline. The partial update increases `user_id` by one for the first seven days; all other days must remain. Each trial resets only its benchmark table and recreates the same baseline outside the timed measurement. Row count, exact distinct keys, and the sum of `user_id` are compared with expected values. A strategy producing duplicates or losing other days is recorded as incorrect, even if it is fast. These expected correctness findings do not fail Airflow tasks; dbt execution errors do.
+
+Flyway creates the isolated `poc_insert_benchmark` tables using the optional migrations in `benchmarks/migrations/` and a separate history table. The benchmark does not change `analytics.delta_events`. It measures dbt wall time, tagged SQL duration, largest individual query memory usage, and active parts. It runs one task at a time with `max_threads=4`, `max_insert_threads=1`, and dbt `threads=1`. Run it while other ingestion is idle. Local cache and background merge effects are not isolated, so results are indicative rather than a universal best strategy. It does not measure Airflow scheduling overhead as part of dbt wall time, concurrent writes, or fault recovery.
+
+This compares dbt incremental strategies for bulk `INSERT … SELECT` loads. Insert settings match the measured server defaults and are pinned in the benchmark profile: `async_insert=1`, `wait_for_async_insert=1`, and `lightweight_deletes_sync=2`. This is not a comparison of client payload sizes or async enabled versus disabled.
+
+To retrieve the report after completion:
+
+```sh
+docker compose cp airflow:/opt/airflow/logs/insert_benchmark/results.md benchmarks/results.md
+docker compose cp airflow:/opt/airflow/logs/insert_benchmark/results.json benchmarks/results.json
+```
+
+The [recorded local report](benchmarks/results.md) and [raw measurements](benchmarks/results.json) contain 36 measured trials on 3,475,204 projected NYC trips. Initial loads favored `append` (2.524 s median dbt wall time); full-month replay favored `insert_overwrite` (2.609 s); partial-week correction favored `delete+insert` (2.558 s). Append produced duplicates on replay. Partition overwrite replaced the whole January partition with only the correction week, losing the remaining days. Keep `delete+insert` for this POC's arbitrary date-window reprocessing. Consider append only with external guarantees against duplicate ingestion, and partition overwrite only when each input contains the complete intended contents of every affected partition. These results do not establish behavior after a crash or the best strategy for a wider or larger dataset.
+
 ## Regular loads
 
 Trigger `delta_s3_to_clickhouse`. One run loads the entire requested date range for all selected tenants, without splitting it into batches:
